@@ -3,14 +3,15 @@
 // Global Variables *******************************************************************************
 
 extern PROC * _running;
+extern MINODE * _minode[BLKSIZE];
 
 // Prototypes *************************************************************************************
 
 int getino(int dev, char * pathname);
-int iput(MINODE * mip);
 
 MINODE * iget(int dev, int ino);
 
+void iput(MINODE * mip);
 void print_dir(int dev, int ino);
 void print_inode(int dev, int ino);
 
@@ -54,25 +55,80 @@ int getino(int dev, char * pathename)
 	return ino; //Return the found ino
 }
 
-int iput(MINODE * mip)
-{
-  printf("iput(%d %d)\n", mip->dev, mip->ino);
+MINODE * iget(int dev, int ino)
+{  
+  int i, blk, disp;
+  char buf[BLKSIZE];
+  INODE *ip;
+  MINODE *mip;
   
-  //TODO
-  //return kcwiput(mip);
+	//Search the In-Memory Inode list (MINODE) list first to see if it's already been loaded
+	for (i=0; i<NMINODE; i++)
+	{
+		mip = minode[i];
+		
+		if ((mip->dev == dev) && (mip->ino == ino)) //If both dev and ino match up, then we've found it
+		{
+			 mip->refCount++;
+			 
+			 return mip;
+		}
+	}
+
+	//Otherwise look for the first empty minode
+	for (i=0; i<NMINODE; i++)
+	{
+		mip = &minode[i];
+		
+		if (mip->refCount == 0)
+		{
+			mip->refCount = 1;
+			mip->dev = dev;
+			mip->ino = ino;
+
+			//Get INODE of ino to buf    
+			blk  = (ino-1)/8 + iblk;
+			disp = (ino-1)%8;
+			
+			get_block(dev, blk, buf);
+			ip = (INODE *)buf + disp;
+			
+			//Copy INODE to mp->INODE
+			mip->INODE = *ip;
+			
+			return mip;
+		}
+	}
+	
+	return 0;
 }
 
-MINODE * iget(int dev, int ino)
+void iput(MINODE * mip)
 {
-  printf("iget(%d %d): ", dev, ino);
-  
-  //TODO
-  //return (MINODE *)kcwiget(dev, ino);
+	int i, block, offset;
+	char buf[BLKSIZE];
+	INODE * ip;
+
+	if(mip)
+	{
+		mip->refCount--; //Decrease the refcount
+
+		if (mip->refCount > 0) //If the MINODE is supporting more than one inode 
+		return; //Return
+		
+		if (!mip->dirty) //If the INODE hasn't been altered at all
+			return; //Return
+		else
+		{
+			//Write back
+			put_inode(mip->dev, mip->ino, mip->INODE);
+		}
+	}
 }
 
 void print_Dir(int dev, int ino)
 {
-	int i = 0;
+	int i;
 	INODE * inode;
 	
 	//Grab inode
@@ -82,7 +138,7 @@ void print_Dir(int dev, int ino)
 	if(inode->i_mode == 16877)
 	{
 		//Access every data block that this directory contains
-		for(i; i<12; i++)
+		for(i=0; i<12; i++)
 		{
 			//Use this INODE to find the data block number
 			u32 iblock = inode->i_block[i];
@@ -94,8 +150,6 @@ void print_Dir(int dev, int ino)
 				
 				char * cp = buf; //Character pointer to hold the current position within the block
 				DIR * dp = (DIR *)buf;
-				
-				printf("Block #: %d\n", iblock);
 				
 				while(cp < &buf[BLKSIZE])
 				{
@@ -110,6 +164,7 @@ void print_Dir(int dev, int ino)
 			}
 		}
 	}
+	
 	else
 		printf("The file supplied was not a directory\n");
 }
