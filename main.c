@@ -1,7 +1,5 @@
 #include "type.h"
 
-
-
 void searchFile(INODE * inode, char * filename, u32 ino)
 {
 	int i = 0;
