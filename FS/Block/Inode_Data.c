@@ -3,6 +3,7 @@
 // Global Variables *******************************************************************************
 
 extern int _iblk;
+extern char _buf[BLKSIZE];
 
 // Prototypes *************************************************************************************
 
@@ -34,11 +35,10 @@ INODE * get_inode(int dev, int ino)
 {
 	int blk = _iblk + (ino-1)/8;
 	int offset = (ino-1)/8;
-	char ibuf[BLKSIZE];
 	
 	//Get the block where the inode exists
-	get_block(dev, blk, ibuf);
+	get_block(dev, blk, _buf);
 	
 	//Now return the inode
-	return (INODE *)ibuf + offset;
+	return (INODE *)_buf + offset;
 }

@@ -8,11 +8,12 @@ extern MINODE * _minode[BLKSIZE];
 // Prototypes *************************************************************************************
 
 int getino(int dev, char * pathname);
+int isearch_ino(MINODE * mip, char * filename);
+int isearch_name(MINODE * mip, int ino, char * filename);
 
 MINODE * iget(int dev, int ino);
 
 void iput(MINODE * mip);
-void print_dir(int dev, int ino);
 void print_inode(int dev, int ino);
 
 // Functions **************************************************************************************
@@ -39,8 +40,7 @@ int getino(int dev, char * pathename)
 
 	for (i=0; i<; i++) //Loop through the steps in the pathname
 	{
-		//TODO
-		ino = kcwsearch(minode, filenames[i]); //Search for the next branch in the path
+		ino = isearch_ino(minode, filenames[i]); //Search for the next branch in the path
 
 		if (!ino) //If the ino returned is 0, we've reached the end of the path
 		{
@@ -53,6 +53,93 @@ int getino(int dev, char * pathename)
 	}
 	
 	return ino; //Return the found ino
+}
+
+int isearch_ino(MINODE * mip, char * filename)
+{
+	char ibuf[BLKSIZE];
+	INODE * inode = mip->INODE;
+		
+	//Check for if the supplied inode is a directory
+	if(inode->i_mode == 16877)
+	{
+		//Access every data block that this directory contains
+		for(i=0; i<12; i++)
+		{
+			//Use this INODE to find the data block number
+			u32 iblock = inode->i_block[i];
+			
+			if(iblock) //If the block number is 0, that block does not exist
+			{
+				//Read in the block and print the directory listing
+				get_block(dev, iblock, ibuf);
+				
+				char * cp = ibuf; //Character pointer to hold the current position within the block
+				DIR * dp = (DIR *)ibuf;
+				
+				while(cp < &buf[BLKSIZE])
+				{
+					//Compare filenames
+					if(!strncmp(dp->name, filename, dp->name_len))
+						return dp->inode; //Return the inode number if this is the correct file
+					
+					//Increment cp and set dp to the next file in the directory
+					cp += dp->rec_len;
+					dp = (DIR *)cp;
+				}
+			}
+		}
+		
+		return 0;
+	}
+	
+	printf("The file supplied was not a directory\n");
+	return 0;
+}
+
+int isearch_name(MINODE * mip, int ino, char * filename)
+{
+	int i = 0;
+	char ibuf[1024];
+	
+	//Check for if the supplied inode is a directory
+	if(inode->i_mode == 16877)
+	{
+		//Access every data block that this directory contains
+		for(i; i<12; i++)
+		{
+			//Use this INODE to find the data block number
+			u32 iblock = inode->i_block[i];
+			
+			if(iblock) //If the block number is 0, that block does not exist
+			{
+				//Read in the block and print the directory listing
+				get_block(dev, iblock, ibuf);
+				
+				char * cp = buf; //Character pointer to hold the current position within the block
+				DIR * dp = (DIR *)ibuf;
+				
+				while(cp < &buf[BLKSIZE])
+				{
+					//If this is the inode we're looking for
+					if(dp->inode == ino)
+					{
+						strcpy(filename, dp->name); //Copy the 
+						return 1;
+					}
+					
+					//Increment cp and set dp to the next file in the directory
+					cp += dp->rec_len;
+					dp = (DIR *)cp;
+				}
+			}
+		}
+		
+		return 0;
+	}
+	
+	printf("The file supplied was not a directory\n");
+	return 0;
 }
 
 MINODE * iget(int dev, int ino)
@@ -124,49 +211,6 @@ void iput(MINODE * mip)
 			put_inode(mip->dev, mip->ino, mip->INODE);
 		}
 	}
-}
-
-void print_Dir(int dev, int ino)
-{
-	int i;
-	INODE * inode;
-	
-	//Grab inode
-	inode = get_inode(dev, ino);
-	
-	//Check for if the supplied inode is a directory
-	if(inode->i_mode == 16877)
-	{
-		//Access every data block that this directory contains
-		for(i=0; i<12; i++)
-		{
-			//Use this INODE to find the data block number
-			u32 iblock = inode->i_block[i];
-			
-			if(iblock) //If the block number is 0, that block does not exist
-			{
-				//Read in the block and print the directory listing
-				get_block(dev, iblock, buf);
-				
-				char * cp = buf; //Character pointer to hold the current position within the block
-				DIR * dp = (DIR *)buf;
-				
-				while(cp < &buf[BLKSIZE])
-				{
-					printf("%s ", dp->name);
-					
-					//Increment cp and set dp to the next file in the directory
-					cp += dp->rec_len;
-					dp = (DIR *)cp;
-				}
-				
-				printf("\n");
-			}
-		}
-	}
-	
-	else
-		printf("The file supplied was not a directory\n");
 }
 
 void print_inode(int dev, int ino)
