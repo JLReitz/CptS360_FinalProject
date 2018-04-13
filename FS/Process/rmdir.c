@@ -68,7 +68,7 @@ int rmChild(MINODE *parentMinode, char *name){
     //search inode for name
     //ino = search()
 
-    getBlock(dev, ino, buf);
+    get_block(dev, ino, buf);
 
     //erase name entry
     cp = buf;
@@ -94,7 +94,7 @@ int rmChild(MINODE *parentMinode, char *name){
             else if(cp + dp->rec_len == buf + 1024){
 
                 prevDir += dp->rec_len;
-                putBlock(dev, ino, buf);
+                put_block(dev, ino, buf);
 
             }
             //if in the middle
@@ -119,7 +119,7 @@ int rmChild(MINODE *parentMinode, char *name){
                 memmove(cp, start, end-start);
 
                 //write back block
-                putBlock(dev, ino, buf);
+                put_block(dev, ino, buf);
             }
 
             //mark parent minode dirty

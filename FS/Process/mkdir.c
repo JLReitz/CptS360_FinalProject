@@ -86,7 +86,7 @@ int createDir(MINODE *parentInode, char* dirName){
     iput(mip);
 
     //data block for . and .. 
-    getBlock(dev, bno, buf);
+    get_block(dev, bno, buf);
 
     cp = buf;
     dp = (DIR*)cp;
@@ -107,7 +107,7 @@ int createDir(MINODE *parentInode, char* dirName){
     dp->name[1] = ".";
 
     //write block
-    putBlock(dev, bno, buf);
+    put_block(dev, bno, buf);
 
     //enter names . and ..
     enterName(parentInode, ino, ".");
@@ -130,7 +130,7 @@ int enterName(MINODE *parentMinode, int ino, char *name){
             break;
         
         bno = parentInode->i_block[i];
-        getBlock(dev, bno, buf);
+        get_block(dev, bno, buf);
 
         //go to last entry
         cp = buf;
@@ -158,7 +158,7 @@ int enterName(MINODE *parentMinode, int ino, char *name){
             strcpy(dp->name, name);
 
             //write block back
-            putBlock(dev, bno, buf);
+            put_block(dev, bno, buf);
 
             //success
             return 0;

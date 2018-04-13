@@ -105,7 +105,7 @@ int enterName(MINODE *parentMinode, int ino, char *name){
             break;
         
         bno = parentInode->i_block[i];
-        getBlock(dev, bno, buf);
+        get_block(dev, bno, buf);
 
         //go to last entry
         cp = buf;
@@ -133,7 +133,7 @@ int enterName(MINODE *parentMinode, int ino, char *name){
             strcpy(dp->name, name);
 
             //write block back
-            putBlock(dev, bno, buf);
+            put_block(dev, bno, buf);
 
             //success
             return 0;
