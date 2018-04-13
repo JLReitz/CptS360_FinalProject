@@ -13,7 +13,7 @@ int tokenize(char * path[], char * pathname, char * delimiter)
 	path[tokens-1] = strtok(pathname, delimiter);
 	
 	//Loop iteratively until the pathname has been toklenized completely
-	while((tokens < BLKSIZE) && !(path[tokens-1] = strtok(0, delimiter)))
+	while((tokens < BLKSIZE) && (path[tokens-1] = strtok(0, delimiter)))
 		tokens++;
 	
 	return tokens;
