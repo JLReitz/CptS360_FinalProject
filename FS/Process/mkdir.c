@@ -12,7 +12,8 @@ int mymkdir(char *pathname){
     char *dirPath = "";
     char *dirName;
     int numberOfDirs;
-    MINODE *dirPathInode;
+    INODE *dirPathInode;
+    MINODE *dirPathMinode;
     int ino, bno;
 
     //tokenize pathname
@@ -25,21 +26,25 @@ int mymkdir(char *pathname){
     }
 
     //get ino and inode of dirPath
-    dirPathInode = iget(dev, getino(dev, dirPath));
+    dirPathMinode = iget(dev, getino(dev, dirPath));
+
+    dirPathInode = &dirPathMinode->INODE;
 
     //verify dirPathInode is a dir
 
     //verify dirName does not exist
 
     //mkdir
-    createDir(dirPathInode, dirName);
+    createDir(dirPathMinode, dirName);
 
     //inc dirPathInode link count
+    dirPathInode->i_links_count++;
 
     //update atime and mark dirty
-
+    dirPathInode->i_atime = time(0L);
+    dirPathMinode->dirty = 1;
     //write back to disk
-    iput(dirPathInode);
+    iput(dirPathMinode);
 
     //successful mkdir 
     return 0
@@ -112,20 +117,51 @@ int createDir(MINODE *parentInode, char* dirName){
     return 0;
 }
 
-int enterName(MINODE *parentInode, int ino, char *name){
-
+int enterName(MINODE *parentMinode, int ino, char *name){
+    INODE *parentInode = &parentMinode->INODE;
+    char *cp, buf[_blocksize];
+    DIR *dp;
+    int bno, neededLen, idealLen, remainingLen;
+    
     //find next block
+    for(int i = 0; i < parentInode->i_size/_blocksize; i++){
 
-    //get name length
+        if(!parentInode->i_block[i])
+            break;
+        
+        bno = parentInode->i_block[i];
+        getBlock(dev, bno, buf);
 
-    //get ideal length
+        //go to last entry
+        cp = buf;
+        dp = (DIR*)cp;
 
-    
+        while(cp < buf + _blocksize){
+            
+            cp += dp->rec_len;
+            dp = (DIR*)cp;
+        }
 
-    //successful
-    return 0;
-}
+        cp = (char*)dp;
 
-int myCreat(char *pathname){
-    
+        //get ideal length and remaining length
+        idealLen = 4*((8 + dp->name_len + 3)/4);
+        remainingLen = dp->rec_len - idealLen;
+
+        //if there is room in the block
+        if(remainingLen >= idealLen){
+            dp->rec_len = remainingLen
+        
+
+            dp->inode = ino;
+            dp->name_len = strlen(name);
+            strcpy(dp->name, name);
+
+            //write block back
+            putBlock(dev, bno, buf);
+
+            //success
+            return 0;
+        }
+    }
 }
