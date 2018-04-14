@@ -1,4 +1,6 @@
-#include "../Type.h"]
+#include "../Type.h"
+#include "Utility/*"
+#include "Block/*"
 #include <time.h>
 
 extern _PROC *running;
@@ -56,6 +58,7 @@ int myrmdir(char *pathname){
     iput(mip);
 
     //success
+    
     return 0;
 }
 
