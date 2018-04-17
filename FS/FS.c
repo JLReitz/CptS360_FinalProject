@@ -1,25 +1,22 @@
 #include "Type.h"
-#include "Util.c"
+#include "Utility/*"
+#include "Process/*"
 
 // Global Variables *******************************************************************************
 
 MINODE minode[NMINODE];
-MINODE *root;
+MINODE * root;
 
-PROC   proc[NPROC], *running;
-MNTABLE mntable, *mntPtr;
+PROC   _proc[NPROC], * _running;
+MNTABLE _mntable, * _mntPtr;
 
-SUPER *sp;
-GD    *gp;
-INODE *ip;
+int _fd, _dev;
+int _nblocks, _ninodes, _bmap, _imap, _iblk;
+char _line[128], _cmd[32], _pathname[64];
 
-int fd, dev;
-int nblocks, ninodes, bmap, imap, iblk;
-char line[128], cmd[32], pathname[64];
-
-char gpath[128];   // hold tokenized strings
-char *name[64];    // token string pointers
-int  n;            // number of token strings 
+char _gpath[128];   //Hold tokenized strings
+char * _name[64];   //Token string pointers
+int  _n;            //Number of token strings 
 
 // Protoypes **************************************************************************************
 
@@ -75,7 +72,7 @@ int run_FS(char * disk)
 	if (sp->s_magic != 0xEF53)
 	{
 		printf("magic = %x is not an ext2 filesystem\n", sp->s_magic);
-		exit(1);
+		return;
 	}  
 	   
 	printf("OK\n");
@@ -123,17 +120,21 @@ int run_FS(char * disk)
 		
 		//TODO replace the following with a function stack
 		if (strcmp(cmd, "ls")==0)
-			 list_file();
+			 ls(pathname);
 		if (strcmp(cmd, "cd")==0)
-			 change_dir();
+			 cd(pathname);
 		if (strcmp(cmd, "pwd")==0)
-		{
-			 printf("\npwd result:\n");
-			 pwd(running->cwd);
-			 printf("\n");
-		}
+			 pwd(pathname);
+		if (strcmp(cmd, "creat")==0)
+			 creat(pathname);
+		if (strcmp(cmd, "mkdir")==0)
+			 mkdir(pathname);
+		if (strcmp(cmd, "rmdir")==0)
+			 rmdir(pathname);
 		if (strcmp(cmd, "quit")==0)
 			 quit();
+			 
+		printf("\n");
 	}
 }
 

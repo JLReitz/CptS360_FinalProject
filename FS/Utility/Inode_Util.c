@@ -1,4 +1,5 @@
-#include "Type.h" 
+#include "Type.h"
+#include "../Block/*"
 
 // Global Variables *******************************************************************************
 
