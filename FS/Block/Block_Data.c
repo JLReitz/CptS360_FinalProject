@@ -1,5 +1,5 @@
-#include "Type.h"
-S
+#include "../Type.h"
+
 // Prototypes *************************************************************************************
 
 int dec_FreeInodes(int dev);
