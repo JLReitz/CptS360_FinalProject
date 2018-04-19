@@ -3,6 +3,9 @@
 #include "Utility/*"
 #include "Block/*"
 
+#ifndef LS_C
+#define LS_C
+
 // Global Variables ********************************************************************************
 
 extern PROC * _running;
@@ -72,3 +75,5 @@ void print_Dir(int dev, int ino)
 	else
 		printf("The file supplied was not a directory\n");
 }
+
+#endif

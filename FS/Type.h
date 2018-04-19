@@ -11,7 +11,6 @@
 
 #define BLKSIZE  1024
 #define ISIZE     128
-
 #define NMINODE    64
 #define NOFT       32
 #define NFD        16

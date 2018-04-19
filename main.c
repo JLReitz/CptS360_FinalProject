@@ -1,4 +1,3 @@
-#include "type.h"
 #include "FS/FS.c"
 
 void main(int argc, char * argv[])

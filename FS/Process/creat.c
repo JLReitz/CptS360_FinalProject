@@ -3,6 +3,9 @@
 #include "Block/*"
 #include <time.h>
 
+#ifndef CREAT_C
+#define CREAT_C
+
 //local globals
 extern _PROC *running;
 extern int _blocksize;
@@ -142,3 +145,5 @@ int enterName(MINODE *parentMinode, int ino, char *name){
         }
     }
 }
+
+#endif
