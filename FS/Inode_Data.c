@@ -1,8 +1,7 @@
+#ifndef INODE_DATA_C
+#define INODE_DATA_C
 
-
-#include "../Type.h"
 #include "Block_Data.c"
-
 
 // Global Variables *******************************************************************************
 
@@ -46,3 +45,5 @@ INODE * get_inode(int dev, int ino)
 	//Now return the inode
 	return (INODE *)_buf + offset;
 }
+
+#endif

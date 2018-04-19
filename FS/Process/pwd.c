@@ -3,6 +3,9 @@
 #include "Utility/*"
 #include "Block/*"
 
+#ifndef PWD_C
+#define PWD_C
+
 // Global Variables ********************************************************************************
 
 extern PROC * _running;
@@ -50,3 +53,5 @@ void pwd_recursive(MINODE * dir)
 	
 	return;
 }
+
+#endif

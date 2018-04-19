@@ -1,4 +1,5 @@
-#inlcude "Type.h"
+#ifndef UTIL_C
+#define UTIL_C
 
 // Prototypes *************************************************************************************
 
@@ -18,3 +19,5 @@ int tokenize(char * path[], char * pathname, char * delimiter)
 	
 	return tokens;
 }
+
+#endif

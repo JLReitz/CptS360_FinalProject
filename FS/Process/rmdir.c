@@ -3,6 +3,9 @@
 #include "Block/*"
 #include <time.h>
 
+#ifndef RMDIR_C
+#define RMDIR_C
+
 extern _PROC *running;
 extern int _blocksize;
 int dev = running->cwd->dev;
@@ -29,7 +32,6 @@ int myrmdir(char *pathname){
     pmip = iget(dev, parentIno);
 
     //check for dir, check if busy, check if empty
-        //if failed check, return -1
     
     //get child ino and inode
     ino = getino(dev, pathnameTemp);
@@ -58,7 +60,6 @@ int myrmdir(char *pathname){
     iput(mip);
 
     //success
-    
     return 0;
 }
 
@@ -69,73 +70,79 @@ int rmChild(MINODE *parentMinode, char *name){
     int ino, start, end;
 
     //search inode for name
-    //ino = search()
+    if(ino = isearch_ino(parentMinode, name)){
+		  get_block(dev, ino, buf);
 
-    get_block(dev, ino, buf);
+		  //erase name entry
+		  cp = buf;
+		  dp = (DIR*)buf;
+		  
+		  while(cp < buf + 1024){
+		      strncpy(dirName, dp->name, dp->name_len);
+		      dirName[dp->name_len] = 0;
+		      //found entry
+		      if(!strcmp(dirName, name)){
+		      
+		          //if first entry
+		          if(cp == buf && dp->rec_len == buf + 1024){
+		              
+		              free(buf);
+		              bdealloc(dev, ino);
+		              pip->i_size -= _blocksize;
+		              
+		              //any blocks after need to be moved up COME BACK TO THIS
+		          
+		          }
+		          //if last entry
+		          else if(cp + dp->rec_len == buf + 1024){
 
-    //erase name entry
-    cp = buf;
-    dp = (DIR*)buf;
-    
-    while(cp < buf + 1024){
-        strncpy(dirName, dp->name, dp->name_len);
-        dirName[dp->name_len] = 0;
-        //found entry
-        if(!strcmp(dirName, name)){
-        
-            //if first entry
-            if(cp == buf && dp->rec_len == buf + 1024){
-                
-                free(buf);
-                bdealloc(dev, ino);
-                pip->i_size -= _blocksize;
-                
-                //any blocks after need to be moved up COME BACK TO THIS
-            
-            }
-            //if last entry
-            else if(cp + dp->rec_len == buf + 1024){
+		              prevDir += dp->rec_len;
+		              put_block(dev, ino, buf);
 
-                prevDir += dp->rec_len;
-                put_block(dev, ino, buf);
+		          }
+		          //if in the middle
+		          else{
 
-            }
-            //if in the middle
-            else{
+		              lastChar = buf;
+		              lastDir = (DIR*)lastChar;
 
-                lastChar = buf;
-                lastDir = (DIR*)lastChar;
+		              //go to last entry
+		              while(lastChar < buf + 1024){
+		                  lastChar += lastDir->rec_len;
+		                  lastDir = (DIRr*)lastChar;
+		              }
 
-                //go to last entry
-                while(lastChar < buf + 1024){
-                    lastChar += lastDir->rec_len;
-                    lastDir = (DIRr*)lastChar;
-                }
+		              lastDir->rec_len = dp->rec_len;
+		              
+		              //location of last dir
+		              start = cp + dp->rec_len;
+		              end = buf + 1024;
 
-                lastDir->rec_len = dp->rec_len;
-                
-                //location of last dir
-                start = cp + dp->rec_len;
-                end = buf + 1024;
+		              //shift memory left, overwriting entry
+		              memmove(cp, start, end-start);
 
-                //shift memory left, overwriting entry
-                memmove(cp, start, end-start);
+		              //write back block
+		              put_block(dev, ino, buf);
+		          }
 
-                //write back block
-                put_block(dev, ino, buf);
-            }
+		          //mark parent minode dirty
+		          parentMinode->dirty = 1;
 
-            //mark parent minode dirty
-            parentMinode->dirty = 1;
+		          //write minode to disk
+		          iput(parentMinode);
+		      }
 
-            //write minode to disk
-            iput(parentMinode);
-        }
-
-        prevDir = dp;
-        cp += dp->rec_len;
-        dp = (DIR*)cp;
+		      prevDir = dp;
+		      cp += dp->rec_len;
+		      dp = (DIR*)cp;
+		  }
+		  
+		  //success
+		  return 0;
     }
-    //success
-    return 0;
+    else
+    
+    return 1;
 }
+
+#endif

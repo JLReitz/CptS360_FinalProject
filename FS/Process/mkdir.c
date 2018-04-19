@@ -3,12 +3,15 @@
 #include "Block/*"
 #include <time.h>
 
+#ifndef MKDIR_C
+#define MKDIR_C
+
 //local globals
 extern _PROC *running;
 extern int _blocksize;
 int dev = running->cwd->dev;
 
-int mymkdir(char *pathname){
+int mkdir(char *pathname){
     //local variables
     char *path[16];
     char *dirPath = "";
@@ -28,28 +31,39 @@ int mymkdir(char *pathname){
     }
 
     //get ino and inode of dirPath
-    dirPathMinode = iget(dev, getino(dev, dirPath));
+    if(dirPathMinode = iget(dev, getino(dev, dirPath))){
+		  dirPathInode = &dirPathMinode->INODE;
 
-    dirPathInode = &dirPathMinode->INODE;
+		  //verify dirPathInode is a dir
+			if(dirPathInode->i_mode == 16877){
+				//verify dirName does not exist
+				if(!isearch_ino(dirPathMinode, dirName)){
+					//mkdir
+					createDir(dirPathMinode, dirName);
 
-    //verify dirPathInode is a dir
+					//inc dirPathInode link count
+					dirPathInode->i_links_count++;
 
-    //verify dirName does not exist
+					//update atime and mark dirty
+					dirPathInode->i_atime = time(0L);
+					dirPathMinode->dirty = 1;
+					//write back to disk
+					iput(dirPathMinode);
 
-    //mkdir
-    createDir(dirPathMinode, dirName);
-
-    //inc dirPathInode link count
-    dirPathInode->i_links_count++;
-
-    //update atime and mark dirty
-    dirPathInode->i_atime = time(0L);
-    dirPathMinode->dirty = 1;
-    //write back to disk
-    iput(dirPathMinode);
-
-    //successful mkdir 
-    return 0
+					//successful mkdir 
+					return 0
+				}
+				else
+					printf("This directory already exists. Please try again with a different name.\n");
+		  }
+		  else
+		  	printf("The parent directory specified oes not exist. Please try again.\n");
+    }
+    else
+    	printf("The path specified does not exist. Please try again.\n");
+    	
+    //Unsuccessful mkdir
+    return 1;
 }
 
 int createDir(MINODE *parentInode, char* dirName){
@@ -93,7 +107,7 @@ int createDir(MINODE *parentInode, char* dirName){
     cp = buf;
     dp = (DIR*)cp;
 
-    //write . and ,, blocks SHOULD BE A FUNCTION LATER//
+    //write . and .. blocks SHOULD BE A FUNCTION LATER//
     dp->inode = ino;
     dp->rec_len = 4*((8 + 1 + 3)/4); //ideal length
     dp->name_len = 1;
@@ -167,3 +181,5 @@ int enterName(MINODE *parentMinode, int ino, char *name){
         }
     }
 }
+
+#endif

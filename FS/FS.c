@@ -1,140 +1,136 @@
-#include "Type.h"
-#include "Utility/*"
-#include "Process/*"
+#ifndef FS_C
+#define FS_C
+
+#include "Block_Data.c"
+#include "Inode_Data.c"
+#include "Inode_Util.c"
+#include "Allocate_Deallocate.c"
+#include "Util.c"
 
 // Global Variables *******************************************************************************
 
-MINODE minode[NMINODE];
-MINODE * root;
+MINODE _minode[NMINODE];
+MINODE * _root;
 
 PROC   _proc[NPROC], * _running;
 MNTABLE _mntable, * _mntPtr;
 
-int _fd, _dev;
+int _dev;
 int _nblocks, _ninodes, _bmap, _imap, _iblk;
-char _line[128], _cmd[32], _pathname[64];
-
+char _line[128], _cmd[32], _pathname[64], _buf[BLKSIZE];
 char _gpath[128];   //Hold tokenized strings
 char * _name[64];   //Token string pointers
 int  _n;            //Number of token strings 
 
 // Protoypes **************************************************************************************
 
-int mount_root();
-int run_FS(char * disk);
-
+void mount_root();
+void run_FS(char * disk);
 void init();
 void quit();
 
 // Functions **************************************************************************************
 
-int mount_root()
+void mount_root()
 {  
-  printf("mount_root()\n");
-  root = iget(dev, 2);
-  root->mounted = 1;
-  root->mptr = &mntable;
+  iget(_dev, 2, _root);
+  _root->mounted = 1;
+  _root->mptr = &_mntable;
 
-  mntPtr = &mntable;
-  mntPtr->dev = dev;
-  mntPtr->ninodes = ninodes;
-  mntPtr->nblocks = nblocks;
-  mntPtr->bmap = bmap;
-  mntPtr->imap = imap;
-  mntPtr->iblk = iblk;
-  mntPtr->mntDirPtr = root;
-  strcpy(mntPtr->devName, "mydisk");
-  strcpy(mntPtr->mntName, "/");
+  _mntPtr = &_mntable;
+  _mntPtr->dev = _dev;
+  _mntPtr->ninodes = _ninodes;
+  _mntPtr->nblocks = _nblocks;
+  _mntPtr->bmap = _bmap;
+  _mntPtr->imap = _imap;
+  _mntPtr->iblk = _iblk;
+  _mntPtr->mntDirPtr = _root;
+  strcpy(_mntPtr->devName, "mydisk");
+  strcpy(_mntPtr->mntName, "/");
 }
 
-int run_FS(char * disk)
+void run_FS(char * disk)
 {
 	int ino;
-	char buf[BLKSIZE];
 
-	if (argc > 1)
-	disk = argv[1];
-
-	printf("checking EXT2 FS ....");
-	if ((fd = open(disk, O_RDWR)) < 0)
+	if ((_dev = open(disk, O_RDWR)) < 0)
 	{
 		printf("open %s failed\n", disk);
-		exit(1);
+		return;
 	}
-	
-	dev = fd;
 
 	//Read super block at 1024
-	get_block(dev, 1, buf);
-	sp = (SUPER *)buf;
-
+	get_block(_dev, 1, _buf);
+	SUPER * sp = (SUPER *)_buf;
+	
 	//Verify that this is an ext32 filesystem
+	printf("checking EXT2 FS ....");
 	if (sp->s_magic != 0xEF53)
 	{
 		printf("magic = %x is not an ext2 filesystem\n", sp->s_magic);
 		return;
-	}  
-	   
-	printf("OK\n");
+	}
+	printf("EXT2 FS confirmed. Initiializing.\n"); 
 	
-	ninodes = sp->s_inodes_count;
-	nblocks = sp->s_blocks_count;
+	_ninodes = sp->s_inodes_count;
+	_nblocks = sp->s_blocks_count;
 	
 	//Get group0 information
-	get_block(dev, 2, buf); 
-	gp = (GD *)buf;
+	get_block(_dev, 2, _buf); 
+	GD * gp = (GD *)_buf;
 
-	bmap = gp->bg_block_bitmap;
-	imap = gp->bg_inode_bitmap;
-	iblk = gp->bg_inode_table;
-	printf("bmp=%d imap=%d iblk = %d\n", bmap, imap, iblk);
+	_bmap = gp->bg_block_bitmap;
+	_imap = gp->bg_inode_bitmap;
+	_iblk = gp->bg_inode_table;
+	printf("bmp=%d _imap=%d _iblk = %d\n", _bmap, _imap, _iblk);
 	
 	//Initialize the filesystem and mount it
 	init();  
 	mount_root();
-	printf("root refCount = %d\n", root->refCount);
+	
+	//Create Process 0
+	printf("creating Process 0 as running process\n");
+	_running = &_proc[0];
+	iget(_dev, 2, _running->cwd);
+	printf("Root inodes refCount = %d\n", _root->refCount);
 
-	printf("creating P0 as running process\n");
-	running = &proc[0];
-	running->cwd = iget(dev, 2);
-	printf("root refCount = %d\n", root->refCount);
-
-	//printf("hit a key to continue : "); 
+	//printf("hit a key to continue : ");
 	//getchar();
 	
 	//Now take user input commands
 	while(1)
 	{
+		//TODO print out cwd instead
 		printf("input command : [ls|cd|pwd|quit] ");
-		fgets(line, 128, stdin);
+		fgets(_line, 128, stdin);
 
-		line[strlen(line)-1] = 0;
+		_line[strlen(_line)-1] = 0;
 
-		if (line[0]==0)
+		if (_line[0]==0)
 			continue;
 			
-		pathname[0] = 0;
+		_pathname[0] = 0;
 
-		sscanf(line, "%s %s", cmd, pathname);
-		printf("cmd=%s pathname=%s\n", cmd, pathname);
+		sscanf(_line, "%s %s", _cmd, _pathname);
+		printf("_cmd=%s _pathname=%s\n", _cmd, _pathname);
 		
-		//TODO replace the following with a function stack
-		if (strcmp(cmd, "ls")==0)
-			 ls(pathname);
-		if (strcmp(cmd, "cd")==0)
-			 cd(pathname);
-		if (strcmp(cmd, "pwd")==0)
-			 pwd(pathname);
-		if (strcmp(cmd, "creat")==0)
-			 creat(pathname);
-		if (strcmp(cmd, "mkdir")==0)
-			 mkdir(pathname);
-		if (strcmp(cmd, "rmdir")==0)
-			 rmdir(pathname);
-		if (strcmp(cmd, "quit")==0)
+		/*//TODO replace the following with a function stack
+		if (strcmp(_cmd, "ls")==0)
+			 ls(_pathname);
+		if (strcmp(_cmd, "cd")==0)
+			 cd(_pathname);
+		if (strcmp(_cmd, "pwd")==0)
+			 pwd(_pathname);
+		if (strcmp(_cmd, "creat")==0)
+			 creat(_pathname);
+		if (strcmp(_cmd, "mkdir")==0)
+			 mkdir(_pathname);
+		if (strcmp(_cmd, "rmdir")==0)
+			 rmdir(_pathname);
+		if (strcmp(_cmd, "quit")==0)
 			 quit();
 			 
-		printf("\n");
+		printf("\_n");*/
 	}
 }
 
@@ -148,7 +144,7 @@ void init()
 
   for (i=0; i<NMINODE; i++)
   {
-    mip = &minode[i];
+    mip = &_minode[i];
     mip->dev = mip->ino = 0;
     mip->refCount = 0;
     mip->mounted = 0;
@@ -156,7 +152,7 @@ void init()
   }
   for (i=0; i<NPROC; i++){
   
-    p = &proc[i];
+    p = &_proc[i];
     p->pid = i;
     p->uid = 0;
     p->cwd = 0;
@@ -173,10 +169,12 @@ void quit()
   
   for (i=0; i<NMINODE; i++)
   {
-    mip = &minode[i];
+    mip = &_minode[i];
     if (mip->refCount > 0)
     	iput(mip);
   }
   
   exit(0);
 }
+
+#endif
