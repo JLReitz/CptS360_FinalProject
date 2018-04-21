@@ -1,7 +1,6 @@
 //****************************************** pwd.c *************************************************
-#include "../Type.h"
-#include "Utility/*"
-#include "Block/*"
+#include "Type.h"
+#include "Inode_Util.c"
 
 #ifndef PWD_C
 #define PWD_C
@@ -24,7 +23,10 @@ void pwd(char * pathname)
 
 void pwd_recursive(MINODE * dir)
 {
+	int ino;
 	char * filename;
+	INODE ip;
+	MINODE * mip;
 	
 	if(dir->ino == 2)
 	{
@@ -32,26 +34,28 @@ void pwd_recursive(MINODE * dir)
 		return;
 	}
 	
-	if(isearch(dir, "..") == 2) //If your parent directory is root
+	if((ino = isearch_ino(dir, "..")) == 2) //If your parent directory is root
 	{
-		ip = &(iget(dev, 2)->INODE);
+		iget(dir->dev, 2, mip);
 		
 		//Load the name of the current directory
-		isearch_name(ip, filename, 2);
+		isearch_name(mip, 2, filename);
 		printf("/%s", filename);
 		
 		return;
 	}
 	else
-		ip = &(iget(dev, kcwsearch(dir, ".."))->INODE);
+	{
+		iget(dir->dev, ino, mip);
 		
-	pwd(iget(dev, kcwsearch(dir, "..")));
-	
-	//Load the name of the current directory
-	searchFile(ip, filename, kcwsearch(dir, "."));
-	printf("/%s", filename);
-	
-	return;
+		pwd_recursive(mip);
+		
+		//Load the name of the current directory
+		isearch_name(mip, isearch_ino(dir, "."), filename);
+		printf("/%s", filename);
+		
+		return;
+	}
 }
 
 #endif

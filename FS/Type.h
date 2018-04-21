@@ -9,6 +9,8 @@
 #include <sys/stat.h>
 #include <ext2fs/ext2_fs.h> 
 
+#define DEBUG_BASEFS
+
 #define BLKSIZE  1024
 #define ISIZE     128
 #define NMINODE    64

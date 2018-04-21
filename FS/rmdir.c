@@ -1,16 +1,16 @@
-#include "../Type.h"
-#include "Utility/*"
-#include "Block/*"
+#include "Block_Data.c"
+#include "Inode_Util.c"
+#include "Util.c"
 #include <time.h>
 
 #ifndef RMDIR_C
 #define RMDIR_C
 
-extern _PROC *running;
+extern _PROC * _running;
 extern int _blocksize;
-int dev = running->cwd->dev;
+int dev = _running->cwd->dev;
 
-int myrmdir(char *pathname){
+int rmdir(char *pathname){
     int ino, parentIno;
     MINODE *mip, *pmip;
     INODE *ip, *pip;

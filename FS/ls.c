@@ -1,7 +1,7 @@
 //****************************************** ls.c **************************************************
-#include "../Type.h"
-#include "Utility/*"
-#include "Block/*"
+#include "Inode_Util.c"
+#include "Inode_Data.c"
+#include "Block_Data.c"
 
 #ifndef LS_C
 #define LS_C
@@ -13,7 +13,7 @@ extern PROC * _running;
 // Prototypes **************************************************************************************
 
 void ls(char * pathname);
-void print_dir(int dev, int ino);
+void print_Dir(int dev, int ino);
 void print_file(int dev, int ino);
 
 // Functions ***************************************************************************************
@@ -35,6 +35,7 @@ void print_Dir(int dev, int ino)
 {
 	int i;
 	INODE * inode;
+	char buf[BLKSIZE];
 	
 	//Grab inode
 	inode = get_inode(dev, ino);
@@ -46,7 +47,7 @@ void print_Dir(int dev, int ino)
 		for(i=0; i<12; i++)
 		{
 			//Use this INODE to find the data block number
-			u32 iblock = inode->i_block[i];
+			int iblock = inode->i_block[i];
 			
 			if(iblock) //If the block number is 0, that block does not exist
 			{
@@ -73,7 +74,7 @@ void print_Dir(int dev, int ino)
 	}
 	
 	else
-		printf("The file supplied was not a directory\n");
+		printf("The file supplied was not a directory.\n");
 }
 
 #endif

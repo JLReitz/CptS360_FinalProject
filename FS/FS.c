@@ -6,6 +6,9 @@
 #include "Inode_Util.c"
 #include "Allocate_Deallocate.c"
 #include "Util.c"
+#include "pwd.c"
+#include "ls.c"
+#include "cd.c"
 
 // Global Variables *******************************************************************************
 
@@ -24,15 +27,47 @@ int  _n;            //Number of token strings
 
 // Protoypes **************************************************************************************
 
-void mount_root();
-void run_FS(char * disk);
 void init();
+void mount_root(char * diskname);
+void run_FS(char * disk);
 void quit();
 
 // Functions **************************************************************************************
 
-void mount_root()
+void init()
+{
+  int i, j;
+  MINODE *mip;
+  PROC   *p;
+
+  printf("INITIALIZING...\n");
+
+  for (i=0; i<NMINODE; i++)
+  {
+    mip = &_minode[i];
+    mip->dev = mip->ino = 0;
+    mip->refCount = 0;
+    mip->mounted = 0;
+    mip->mptr = 0;
+  }
+  
+  for (i=0; i<NPROC; i++)
+  {
+  
+    p = &_proc[i];
+    p->pid = i;
+    p->uid = 0;
+    p->cwd = 0;
+    
+    for (j=0; j<NFD; j++)
+      p->fd[j] = 0;
+  }
+} 
+
+void mount_root(char * diskname)
 {  
+	printf("MOUNTING...\n");	
+	
   iget(_dev, 2, _root);
   _root->mounted = 1;
   _root->mptr = &_mntable;
@@ -45,7 +80,7 @@ void mount_root()
   _mntPtr->imap = _imap;
   _mntPtr->iblk = _iblk;
   _mntPtr->mntDirPtr = _root;
-  strcpy(_mntPtr->devName, "mydisk");
+  strcpy(_mntPtr->devName, diskname);
   strcpy(_mntPtr->mntName, "/");
 }
 
@@ -64,13 +99,13 @@ void run_FS(char * disk)
 	SUPER * sp = (SUPER *)_buf;
 	
 	//Verify that this is an ext32 filesystem
-	printf("checking EXT2 FS ....");
+	printf("checking EXT2 FS...");
 	if (sp->s_magic != 0xEF53)
 	{
 		printf("magic = %x is not an ext2 filesystem\n", sp->s_magic);
 		return;
 	}
-	printf("EXT2 FS confirmed. Initiializing.\n"); 
+	printf("EXT2 FS confirmed.\n"); 
 	
 	_ninodes = sp->s_inodes_count;
 	_nblocks = sp->s_blocks_count;
@@ -86,7 +121,7 @@ void run_FS(char * disk)
 	
 	//Initialize the filesystem and mount it
 	init();  
-	mount_root();
+	mount_root(disk);
 	
 	//Create Process 0
 	printf("creating Process 0 as running process\n");
@@ -133,34 +168,6 @@ void run_FS(char * disk)
 		printf("\_n");*/
 	}
 }
-
-void init()
-{
-  int i, j;
-  MINODE *mip;
-  PROC   *p;
-
-  printf("init()\n");
-
-  for (i=0; i<NMINODE; i++)
-  {
-    mip = &_minode[i];
-    mip->dev = mip->ino = 0;
-    mip->refCount = 0;
-    mip->mounted = 0;
-    mip->mptr = 0;
-  }
-  for (i=0; i<NPROC; i++){
-  
-    p = &_proc[i];
-    p->pid = i;
-    p->uid = 0;
-    p->cwd = 0;
-    
-    for (j=0; j<NFD; j++)
-      p->fd[j] = 0;
-  }
-} 
 
 void quit()
 {

@@ -2,10 +2,11 @@
 #define INODE_UTIL_C
 
 #include "Block_Data.c"
-#include "Utility.c"
+#include "Util.c"
 
 // Global Variables *******************************************************************************
 
+extern int _iblk;
 extern PROC * _running;
 extern MINODE _minode[NMINODE];
 
