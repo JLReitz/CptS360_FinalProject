@@ -38,7 +38,7 @@ void print_Dir(int dev, int ino)
 	char buf[BLKSIZE];
 	
 	//Grab inode
-	inode = get_inode(dev, ino);
+	get_inode(dev, ino, inode);
 	
 	//Check for if the supplied inode is a directory
 	if(inode->i_mode == 16877)
