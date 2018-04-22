@@ -3,11 +3,21 @@
 
 #include "Type.h"
 
-// Prototypes *************************************************************************************
+#define NUM_0ARG_FUNCTIONS 2
+#define NUM_1ARG_FUNCTIONS 2
+
+// GLobal Variables ********************************************************************************
+
+char * functions_0arg_str[NUM_0ARG_FUNCTIONS] = {"pwd", "quit"};
+char * functions_1arg_str[NUM_1ARG_FUNCTIONS] = {"ls", "cd"};
+
+// Prototypes **************************************************************************************
 
 int tokenize(char * path[], char * pathname, char * delimiter);
+int find_0arg_function(char * cmd);
+int find_1arg_function(char * cmd);
 
-// Funcions ***************************************************************************************
+// Funcions ****************************************************************************************
 
 int tokenize(char * path[], char * pathname, char * delimiter)
 {
@@ -20,6 +30,32 @@ int tokenize(char * path[], char * pathname, char * delimiter)
 		tokens++;
 	
 	return tokens;
+}
+
+int find_0arg_function(char * cmd)
+{
+	int i = 0;
+	
+	for(i; i<NUM_0ARG_FUNCTIONS; i++)
+	{
+		if(!strcmp(cmd, functions_0arg_str[i]))
+			return i;
+	}
+	
+	return -1;
+}
+
+int find_1arg_function(char * cmd)
+{
+	int i = 0;
+	
+	for(i; i<NUM_1ARG_FUNCTIONS; i++)
+	{
+		if(!strcmp(cmd, functions_1arg_str[i]))
+			return i;
+	}
+	
+	return -1;
 }
 
 #endif

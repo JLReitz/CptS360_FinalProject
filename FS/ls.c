@@ -40,7 +40,7 @@ void print_Dir(int dev, int ino)
 	//Grab inode
 	get_inode(dev, ino, inode);
 	
-	//Check for if the supplied inode is a directory
+	//Check for if the supplied inolsde is a directory
 	if(inode->i_mode == 16877)
 	{
 		//Access every data block that this directory contains

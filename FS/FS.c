@@ -10,14 +10,22 @@
 #include "ls.c"
 #include "cd.c"
 
-// Global Variables *******************************************************************************
+// Global Variables ********************************************************************************
 
-MINODE _minode[NMINODE];
+int _dev;
+int _nblocks, _ninodes, _bmap, _imap, _iblk;
+char _line[128], _buf[BLKSIZE];
+char * _cwd;
+char * _cmd[32];
+
 MINODE * _root;
+MINODE _minode[NMINODE];
 
-PROC   _proc[NPROC], * _running;
 MNTABLE _mntable, * _mntPtr;
 
+<<<<<<< HEAD
+PROC   _proc[NPROC], * _running;
+=======
 OFT _OpenFileTable[NOFT];
 
 int _dev;
@@ -26,15 +34,21 @@ char _line[128], _cmd[32], _pathname[64], _buf[BLKSIZE];
 char _gpath[128];   //Hold tokenized strings
 char * _name[64];   //Token string pointers
 int  _n;            //Number of token strings 
+>>>>>>> 41a7faa9203f9a707ef8ed6df889b2bc5c6be112
 
-// Protoypes **************************************************************************************
+// Protoypes ***************************************************************************************
 
 void init();
 void mount_root(char * diskname);
 void run_FS(char * disk);
 void quit();
 
-// Functions **************************************************************************************
+//Function pointers ********************************************************************************
+
+void (*functions_0arg[])() = {pwd, quit};
+void (*functions_1arg[])(char *) = {ls, cd};
+
+// Functions ***************************************************************************************
 
 void init()
 {
@@ -88,7 +102,7 @@ void mount_root(char * diskname)
 
 void run_FS(char * disk)
 {
-	int ino;
+	int argc, function;
 
 	if ((_dev = open(disk, O_RDWR)) < 0)
 	{
@@ -137,37 +151,39 @@ void run_FS(char * disk)
 	//Now take user input commands
 	while(1)
 	{
-		//TODO print out cwd instead
-		printf("input command : [ls|cd|pwd|quit] ");
+		printf("%s >> ", _cwd);
 		fgets(_line, 128, stdin);
-
+		
+		//Replace newline character
 		_line[strlen(_line)-1] = 0;
 
 		if (_line[0]==0)
 			continue;
-			
-		_pathname[0] = 0;
-
-		sscanf(_line, "%s %s", _cmd, _pathname);
-		printf("_cmd=%s _pathname=%s\n", _cmd, _pathname);
 		
-		/*//TODO replace the following with a function stack
-		if (strcmp(_cmd, "ls")==0)
-			 ls(_pathname);
-		if (strcmp(_cmd, "cd")==0)
-			 cd(_pathname);
-		if (strcmp(_cmd, "pwd")==0)
-			 pwd(_pathname);
-		if (strcmp(_cmd, "creat")==0)
-			 creat(_pathname);
-		if (strcmp(_cmd, "mkdir")==0)
-			 mkdir(_pathname);
-		if (strcmp(_cmd, "rmdir")==0)
-			 rmdir(_pathname);
-		if (strcmp(_cmd, "quit")==0)
-			 quit();
-			 
-		printf("\_n");*/
+		argc = tokenize(_cmd, _line, " ");
+		
+		switch(argc)
+		{
+		case 1:
+			
+			if((function = find_0arg_function(_cmd[0])) >= 0)
+				(*functions_0arg[function])();
+			else
+				printf("This command does not exist.\n");
+			
+			break;
+		case 2:
+			
+			if((function = find_1arg_function(_cmd[0])) >= 0)
+				(*functions_1arg[function])(_cmd[1]);
+			else
+				printf("This command does not exist.\n");
+			
+			break;
+		default:
+		
+			break;
+		}
 	}
 }
 
