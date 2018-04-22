@@ -18,6 +18,8 @@ MINODE * _root;
 PROC   _proc[NPROC], * _running;
 MNTABLE _mntable, * _mntPtr;
 
+OFT _OpenFileTable[NOFT];
+
 int _dev;
 int _nblocks, _ninodes, _bmap, _imap, _iblk;
 char _line[128], _cmd[32], _pathname[64], _buf[BLKSIZE];

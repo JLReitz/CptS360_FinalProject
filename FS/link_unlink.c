@@ -1,13 +1,14 @@
-#include "../Type.h"
-#include "../Block/Block_Data.c"
-#include "../Block/Inode_Data.c"
-#include "../Utility/Util.c"
+#include "Type.h"
+#include "Block_Data.c"
+#include "Inode_Data.c"
+#include "Util.c"
 #include "mkdir.c"
 
 extern PROC running;
+extern int dev = running->cwd->dev;
 
-int myLink(char *oldPathname, char*newPathname){
-  char oldFile[16]; newFile[16], newPath[16], newName[16];
+int Link(char *oldPathname, char*newPathname){
+  char oldFile[16]; newFile[16], *newPath = "", *newName;
   int inoOld, inoNew, numberOfTokens;
   INODE *inodeOld, *inodeNew;
   MINODE *minodeOld, *minodeNew;
@@ -24,11 +25,34 @@ int myLink(char *oldPathname, char*newPathname){
   }
 
   //check new path exists but name does not
+  //tokenize new pathname
+  numberOfTokens = tokenize(newFile, newPathname, "/");
+
+  //cat to new dir path
+  for(int i = 0; i < numberOfTokens-2; i++){
+
+    strcat(newPath, "/");
+    strcat(newPath, newFile[i]);
+  }
+
+  newName = newFile[numberOfTokens-1];
+
+  //check if path exists
+  if(!getino(dev, newPath)){
+    printf("new pathname does not exist\n");
+    return 1;
+  }
+
+  //check that name doesnt exist
+  if(getino(dev, newPathname)){
+    printf("link name already exists\n");
+    return 1;
+  }
 
   //load new into memory
-  inoNew = getino(running->cwd, newPathname);
+  inoNew = getino(dev, newPath);
   minodeNew = iget(dev, inoNew);
-  //inodeNew = &minodeNew->INODE;
+  inodeNew = &minodeNew->INODE;
 
   //add entry to to new path data block with old ino
   enterName(minodeNew, inoOld, newName)
@@ -46,12 +70,13 @@ int myLink(char *oldPathname, char*newPathname){
   return 0;
 }
 
-int myUnlink(char *pathname){
+int Unlink(char *pathname){
   //char 
   int ino;
   INODE *inode;
   MINODE *minode;
 
+  
   //make sure it's not a dir
 
   //decremet inode link count
@@ -63,11 +88,11 @@ int myUnlink(char *pathname){
   //remove name from parent directory 
 }
 
-int mySymlink(char *oldPathname, char *newPathname){
+int Symlink(char *oldPathname, char *newPathname){
 
 }
 
-int myReadlink(char *pathname){
+int Readlink(char *pathname){
   
 }
 

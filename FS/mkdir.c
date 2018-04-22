@@ -1,6 +1,6 @@
-#include "../Type.h"
-#include "Utility/*"
-#include "Block/*"
+#include "Type.h"
+#include "Block_Data.c"
+#include "Inode_Data.c"
 #include <time.h>
 
 #ifndef MKDIR_C
@@ -30,12 +30,14 @@ int mkdir(char *pathname){
         strcat(dirPath, path[i]);
     }
 
+    dirName = path[numberOfDirs - 1];
+
     //get ino and inode of dirPath
     if(dirPathMinode = iget(dev, getino(dev, dirPath))){
 		  dirPathInode = &dirPathMinode->INODE;
 
 		  //verify dirPathInode is a dir
-			if(dirPathInode->i_mode == 16877){
+            if(S_ISDIR(dirPathInode->i_mode)){
 				//verify dirName does not exist
 				if(!isearch_ino(dirPathMinode, dirName)){
 					//mkdir

@@ -91,7 +91,11 @@ int rmChild(MINODE *parentMinode, char *name){
 		              pip->i_size -= _blocksize;
 		              
 		              //any blocks after need to be moved up COME BACK TO THIS
-		          
+		          	while(pip->i_block[i + l] && i+1 < 12){
+						  i++;
+						  get_block(dev, pip->i_block[i], buf);
+						  put_block(dev, pip->i_blocks[i-1], buf);
+					  }		
 		          }
 		          //if last entry
 		          else if(cp + dp->rec_len == buf + 1024){
