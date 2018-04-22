@@ -18,23 +18,15 @@ char _line[128], _buf[BLKSIZE];
 char * _cwd;
 char * _cmd[32];
 
+
 MINODE * _root;
 MINODE _minode[NMINODE];
 
 MNTABLE _mntable, * _mntPtr;
 
-<<<<<<< HEAD
 PROC   _proc[NPROC], * _running;
-=======
-OFT _OpenFileTable[NOFT];
 
-int _dev;
-int _nblocks, _ninodes, _bmap, _imap, _iblk;
-char _line[128], _cmd[32], _pathname[64], _buf[BLKSIZE];
-char _gpath[128];   //Hold tokenized strings
-char * _name[64];   //Token string pointers
-int  _n;            //Number of token strings 
->>>>>>> 41a7faa9203f9a707ef8ed6df889b2bc5c6be112
+OFT _OpenFileTable[NOFT];
 
 // Protoypes ***************************************************************************************
 

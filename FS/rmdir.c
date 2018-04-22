@@ -90,7 +90,7 @@ int rmChild(MINODE *parentMinode, char *name){
 		              bdealloc(dev, ino);
 		              pip->i_size -= _blocksize;
 		              
-		              //any blocks after need to be moved up COME BACK TO THIS
+		            //any blocks after need to be moved up
 		          	while(pip->i_block[i + l] && i+1 < 12){
 						  i++;
 						  get_block(dev, pip->i_block[i], buf);
