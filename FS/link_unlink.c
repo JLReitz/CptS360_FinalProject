@@ -8,7 +8,7 @@ extern PROC running;
 extern int dev = running->cwd->dev;
 
 int Link(char *oldPathname, char*newPathname){
-  char oldFile[16]; newFile[16], *newPath = "", *newName;
+  char *oldFile[16]; *newFile[16], *newPath = "", *newName;
   int inoOld, inoNew, numberOfTokens;
   INODE *inodeOld, *inodeNew;
   MINODE *minodeOld, *minodeNew;
@@ -71,25 +71,98 @@ int Link(char *oldPathname, char*newPathname){
 }
 
 int Unlink(char *pathname){
-  //char 
-  int ino;
-  INODE *inode;
-  MINODE *minode;
+  char *path[16], *dirPath = "", *dirName; 
+  int ino, parentIno;
+  INODE *inode, *parentInode;
+  MINODE *minode, *parentMinode;
 
   
   //make sure it's not a dir
+ /* //tokenize new pathname
+  numberOfTokens = tokenize(path, Pathname, "/");
+
+  //cat to new dir path
+  for(int i = 0; i < numberOfTokens-2; i++){
+
+    strcat(dirPath, "/");
+    strcat(dirPath, path[i]);
+  }
+
+  dirName = path[numberOfTokens-1];*/
+
+  ino = getino(dev, pathname);
+  minode = iget(dev, ino);
+  inode = &minode->INODE;
+
+  if(S_ISDIR(inode->i_mode)){
+    printf("cannot unlink dir\n");
+    return 1;
+  }  
 
   //decremet inode link count
 
+  inode->i_links_count--;
+
   //remove inode if links = 0
+  if(!inode->i_links_count){
 
     //deallocate datablocks, inode
+    for(int i = 0; i < 12 && inode->i_block[i]; i++){
+
+      bdeallocate(dev, inode->i_block[i]);
+    }
+
+    idealloc(dev, ino);
+  }
 
   //remove name from parent directory 
+  parentIno = getino(dev, pathname);
+  parentMinode = iget(dev, parentIno);
+  parentInode = parentMinode->INODE;
+
+  rm_child(parentMinode, dirPath);
+
+  parentInode->i_atime = parentInode->i_mtime = time(0L);
+  parentMinode->dirty = 1;
+  minode->dirty = 1;
+  iput(minode);
+  iput(parentMinode);
+
+  return 0;
 }
 
 int Symlink(char *oldPathname, char *newPathname){
+  int oldIno, linkIno;
+  INODE *oldInode, *linkInode;
+  MINODE *oldMinode, *linkMinode;
 
+  //verify old pathname
+  if(!oldIno = getino(dev, oldPathname)){
+    printf("path does not exist\n");
+    return 1;
+  }
+  oldMinode = iget(dev, oldIno);
+  oldInode = oldMinode->INODE;
+
+  //create new pathname file
+  if(creat(newPathname)){
+    printf("failed to create file\n");
+    return 1;
+  }
+
+  oldMinode->dirty = 1;
+
+  linkIno = getino(dev, newPathname);
+  linkMinode = iget(dev, linkIno);
+  linkInode = linkMinode->INODE;
+
+  linkInode->i_mode = 0120000;
+
+  linkInode->i_block[0] = oldPathname; //NOT SURE ABOUT THIS
+
+  linkMinode->dirty = 1;
+
+  iput(linkMinode);
 }
 
 int Readlink(char *pathname){
