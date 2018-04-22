@@ -6,15 +6,26 @@
 // Global Variables *******************************************************************************
 
 extern int _iblk;
-extern char _buf[BLKSIZE];
 
 // Prototypes *************************************************************************************
 
+int get_inode(int dev, int ino, INODE * inode);
 int put_inode(int dev, int ino, INODE * inode);
 
-INODE * get_inode(int dev, int ino);
-
 // Functions **************************************************************************************
+
+int get_inode(int dev, int ino, INODE * inode)
+{
+	int blk = _iblk + (ino-1)/8;
+	int offset = (ino-1)/8;
+	char ibuf[BLKSIZE];
+	
+	//Get the block where the inode exists
+	get_block(dev, blk, ibuf);
+	
+	//Now return the inode
+	*inode = *((INODE *)ibuf + offset);
+}
 
 int put_inode(int dev, int ino, INODE * inode_fresh)
 {
@@ -32,18 +43,6 @@ int put_inode(int dev, int ino, INODE * inode_fresh)
 	
 	//Replace the block
 	put_block(dev, blk, ibuf);
-}
-
-INODE * get_inode(int dev, int ino)
-{
-	int blk = _iblk + (ino-1)/8;
-	int offset = (ino-1)/8;
-	
-	//Get the block where the inode exists
-	get_block(dev, blk, _buf);
-	
-	//Now return the inode
-	return (INODE *)_buf + offset;
 }
 
 #endif

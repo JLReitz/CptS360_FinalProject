@@ -36,7 +36,7 @@ void pwd_recursive(MINODE * dir)
 	
 	if((ino = isearch_ino(dir, "..")) == 2) //If your parent directory is root
 	{
-		iget(dir->dev, 2, mip);
+		mip = iget(dir->dev, 2);
 		
 		//Load the name of the current directory
 		isearch_name(mip, 2, filename);
@@ -46,7 +46,7 @@ void pwd_recursive(MINODE * dir)
 	}
 	else
 	{
-		iget(dir->dev, ino, mip);
+		mip = iget(dir->dev, ino);
 		
 		pwd_recursive(mip);
 		

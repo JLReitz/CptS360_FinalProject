@@ -13,7 +13,7 @@ extern MINODE _minode[NMINODE];
 // Prototypes *************************************************************************************
 
 int getino(int dev, char * pathname);
-int iget(int dev, int ino, MINODE * minode);
+MINODE * iget(int dev, int ino);
 int isearch_ino(MINODE * mip, char * filename);
 int isearch_name(MINODE * mip, int ino, char * filename);
 
@@ -33,9 +33,9 @@ int getino(int dev, char * pathname)
 		return 2; //Return the root inode number
 
 	if (pathname[0]=='/') //If the pathname is absolute 
-		iget(dev, 2, minode); //Start with minode = root
+		minode = iget(dev, 2); //Start with minode = root
 	else
-		iget(_running->cwd->dev, _running->cwd->ino, minode); //Otherwise start with mip = cwd
+		minode = iget(_running->cwd->dev, _running->cwd->ino); //Otherwise start with mip = cwd
 
 	strcpy(ibuf, pathname);
 	
@@ -52,13 +52,13 @@ int getino(int dev, char * pathname)
 		  return 0;
 		}
 		
-		iget(dev, ino, minode); //Set minode to the next step that was found
+		minode = iget(dev, ino); //Set minode to the next step that was found
 	}
 	
 	return ino; //Return the found ino
 }
 
-int iget(int dev, int ino, MINODE * minode)
+MINODE * iget(int dev, int ino)
 {  
   int i, blk, disp;
   char buf[BLKSIZE];
@@ -73,9 +73,8 @@ int iget(int dev, int ino, MINODE * minode)
 		if ((mip->dev == dev) && (mip->ino == ino)) //If both dev and ino match up, then we've found it
 		{
 			 mip->refCount++;
-			 minode = mip;
 			 
-			 return 1;
+			 return mip;
 		}
 	}
 
@@ -100,9 +99,7 @@ int iget(int dev, int ino, MINODE * minode)
 			//Copy INODE to mp->INODE
 			mip->INODE = *ip;
 			
-			minode = mip;
-			
-			return 1;
+			return mip;
 		}
 	}
 	

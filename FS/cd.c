@@ -13,7 +13,7 @@ void cd(char * pathname)
 	
 	if(ino)
 	{
-		iget(_running->cwd->dev, ino, mip);
+		mip = iget(_running->cwd->dev, ino);
 		
 		if(mip->INODE.i_mode == 16877)
 			_running->cwd = mip;

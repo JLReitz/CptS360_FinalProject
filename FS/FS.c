@@ -70,7 +70,7 @@ void mount_root(char * diskname)
 {  
 	printf("MOUNTING...\n");	
 	
-  iget(_dev, 2, _root);
+  _root = iget(_dev, 2);
   _root->mounted = 1;
   _root->mptr = &_mntable;
 
@@ -128,7 +128,7 @@ void run_FS(char * disk)
 	//Create Process 0
 	printf("creating Process 0 as running process\n");
 	_running = &_proc[0];
-	iget(_dev, 2, _running->cwd);
+	_running->cwd = iget(_dev, 2);
 	printf("Root inodes refCount = %d\n", _root->refCount);
 
 	//printf("hit a key to continue : ");
