@@ -119,7 +119,7 @@ int createFile(MINODE *parentMinode, char* fileName){
     iput(mip);
 
     //enter name ..
-    enterName(parentMinode, ino, "..");
+    enterName(parentMinode, ino, fileName);
 
     //successful
     return 0;
@@ -132,7 +132,7 @@ int enterName(MINODE *parentMinode, int ino, char *name){
     int bno, neededLen, idealLen, remainingLen;
     
     //find next block
-    for(int i = 0; i < parentInode->i_size/BLKSIZE; i++){
+    for(int i = 0; i < 12; i++){
 
         if(!parentInode->i_block[i])
             break;
@@ -144,22 +144,27 @@ int enterName(MINODE *parentMinode, int ino, char *name){
         cp = buf;
         dp = (DIR*)cp;
 
-        while(cp < buf + BLKSIZE){
+        while((cp+dp->rec_len) < (buf+BLKSIZE)){
             
             cp += dp->rec_len;
             dp = (DIR*)cp;
         }
 
-        cp = (char*)dp;
-
         //get ideal length and remaining length
         idealLen = 4*((8 + dp->name_len + 3)/4);
         remainingLen = dp->rec_len - idealLen;
+        neededLen = 4*((8 + strlen(name) + 3)/4);
 
         //if there is room in the block
-        if(remainingLen >= idealLen){
+        if(remainingLen >= neededLen){
+        		
+        		//Set the OLD last entry's rec_length to the correct size and then incrememnt past it
+        		dp->rec_len = idealLen;        		
+        		cp += dp->rec_len;
+        		dp = (DIR*)cp;
+        		
+        		//Now set the NEW last entry's information
             dp->rec_len = remainingLen;
-        
             dp->inode = ino;
             dp->name_len = strlen(name);
             strcpy(dp->name, name);
@@ -171,6 +176,8 @@ int enterName(MINODE *parentMinode, int ino, char *name){
             return 0;
         }
     }
+    
+    return 1;
 }
 
 #endif

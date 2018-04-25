@@ -5,9 +5,9 @@
 
 // Prototypes *************************************************************************************
 
-int free_bit(char * buf, int bit);
-int set_bit(char * buf, int bit);
-int tst_bit(char * buf, int bit);
+int free_bit(char buf[], int bit);
+int set_bit(char buf[], int bit);
+int tst_bit(char buf[], int bit);
 
 void dec_FreeBlocks(int dev);
 void inc_FreeBlocks(int dev);
@@ -18,7 +18,7 @@ void put_block(int dev, int blk, char buf[]);
 
 // Functions **************************************************************************************
 
-int free_bit(char * buf, int bit)
+int free_bit(char buf[], int bit)
 {
   int i = bit / 8; 
   int j = bit % 8;
@@ -26,7 +26,7 @@ int free_bit(char * buf, int bit)
   buf[i] &= ~(1 << j);
 }
 
-int set_bit(char * buf, int bit)
+int set_bit(char buf[], int bit)
 {
   int i = bit / 8; 
   int j = bit % 8;
@@ -34,7 +34,7 @@ int set_bit(char * buf, int bit)
   buf[i] |= (1 << j);
 }
 
-int tst_bit(char * buf, int bit)
+int tst_bit(char buf[], int bit)
 {
   int i = bit / 8;
   int j = bit % 8;

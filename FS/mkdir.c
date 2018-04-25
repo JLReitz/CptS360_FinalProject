@@ -59,6 +59,7 @@ int mymkdir(char *pathname){
 					//update atime and mark dirty
 					dirPathInode->i_atime = time(0L);
 					dirPathMinode->dirty = 1;
+					
 					//write back to disk
 					iput(dirPathMinode);
 
@@ -137,8 +138,7 @@ int createDir(MINODE *parentInode, char* dirName){
     put_block(_running->cwd->dev, bno, buf);
 
     //enter names . and ..
-    enterName(parentInode, ino, ".");
-    enterName(parentInode, ino, "..");
+    enterName(parentInode, ino, dirName);
 
     //successful
     return 0;

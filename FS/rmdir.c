@@ -18,14 +18,13 @@ int myrmdir(char *pathname){
     int ino, parentIno;
     MINODE *mip, *pmip;
     char * dirName, * path[16], * dirPath, * pathnameTemp = pathname;
-
-   //tokenize pathname
+    
    int numberOfDirs = tokenize(path, pathname, "/");
 
 	  if(numberOfDirs > 1)
 	  {
 		  //cat to dir path;
-		  for(int i = 0; i < numberOfDirs-2; i++){
+		  for(int i = 0; i < numberOfDirs-1; i++){
 		      strcat(dirPath, "/");
 		      strcat(dirPath, path[i]);
 		  }
@@ -47,10 +46,10 @@ int myrmdir(char *pathname){
 		  //get child ino and inode
 		  if(ino = getino(_running->cwd->dev, pathnameTemp))
 		  {
-				mip = iget(_running->cwd->dev , ino);			
+				mip = iget(_running->cwd->dev , ino);		
 				
 				//deallocate block and inode
-				for(int i = 0; i <= 14; i++){
+				for(int i = 0; i <= 12; i++){
 				    bdealloc(_running->cwd->dev, mip->INODE.i_block[i]);
 				}
 
@@ -85,88 +84,85 @@ int myrmdir(char *pathname){
 
 int rmChild(MINODE *parentMinode, char *name){
     INODE *pip = &parentMinode->INODE;
-    DIR *dp, *prevDir, *lastDir;
-    char buf[BLKSIZE], *cp, *dirName, *lastChar;
+    DIR *dp, *prevdp, *lastdp;
+    char buf[BLKSIZE], dirName[255], *cp, *lastcp;
     int ino, start, end;
+	  
+	  //Check to make sure that the child exists within the parent directory
+	  if(ino = isearch_ino(parentMinode, name))
+	  {
+			for(int i=0; i<12; i++)
+			{
+				if(pip->i_block[i])
+				{
+					//Get DIR info
+					get_block(_running->cwd->dev, pip->i_block[i], buf);
 
-    //search inode for name
-    if(ino = isearch_ino(parentMinode, name)){
-		  get_block(_running->cwd->dev, ino, buf);
+					//erase name entry
+					cp = buf;
+					dp = (DIR*)buf;
+					
+					while(cp < (buf+1024)){
+							strncpy(dirName, dp->name, dp->name_len);
+							dirName[dp->name_len] = 0;
+							
+							//found entry
+							if(!strcmp(dirName, name)){
+							
+							    //If last entry
+							    if(cp + dp->rec_len == buf + 1024){
 
-		  //erase name entry
-		  cp = buf;
-		  dp = (DIR*)buf;
-		  
-		  while(cp < buf + 1024){
-		      strncpy(dirName, dp->name, dp->name_len);
-		      dirName[dp->name_len] = 0;
-		      //found entry
-		      if(!strcmp(dirName, name)){
-		      
-		          //if first entry
-		          if(cp == buf && dp->rec_len == buf + 1024){
-		              
-		              int i = 0;
-		              bdealloc(_running->cwd->dev, ino);
-		              pip->i_size -= BLKSIZE;
-		              
-		          //any blocks after need to be moved up
-		        	while(pip->i_block[i + 1] && i+1 < 12){
-								i++;
-								get_block(_running->cwd->dev, pip->i_block[i], buf);
-								put_block(_running->cwd->dev, pip->i_block[i-1], buf);
-					  	}		
-		          }
-		          //if last entry
-		          else if(cp + dp->rec_len == buf + 1024){
+							        prevdp->rec_len += dp->rec_len;
+							        put_block(_running->cwd->dev, pip->i_block[i], buf);
 
-		              prevDir += dp->rec_len;
-		              put_block(_running->cwd->dev, ino, buf);
+							    }
+							    else{
+											
+											//Move all following entries up
+							        lastcp = cp;
+							        lastdp = (DIR*)lastcp;
 
-		          }
-		          //if in the middle
-		          else{
+							        //go to last entry
+							        while(lastcp < buf+1024){
+							            lastcp += lastdp->rec_len;
+							            lastdp = (DIR*)lastcp;
+							        }
 
-		              lastChar = buf;
-		              lastDir = (DIR*)lastChar;
+							        lastdp->rec_len = dp->rec_len;
+							        
+							        //location of first dir to be moved over
+							        start = cp + dp->rec_len;
+							        end = buf + 1024;
 
-		              //go to last entry
-		              while(lastChar < buf + 1024){
-		                  lastChar += lastDir->rec_len;
-		                  lastDir = (DIR*)lastChar;
-		              }
+							        //shift memory left, overwriting entry
+							        memmove(cp, start, end-start);
 
-		              lastDir->rec_len = dp->rec_len;
-		              
-		              //location of last dir
-		              start = cp + dp->rec_len;
-		              end = buf + 1024;
+							        //write back block
+							        put_block(_running->cwd->dev, pip->i_block[i], buf);
+							    }
 
-		              //shift memory left, overwriting entry
-		              memmove(cp, start, end-start);
+							    //mark parent minode dirty
+							    parentMinode->dirty = 1;
 
-		              //write back block
-		              put_block(_running->cwd->dev, ino, buf);
-		          }
+							    //write minode to disk
+							    iput(parentMinode);
+							    
+							    //success
+									return 0;
+							}
 
-		          //mark parent minode dirty
-		          parentMinode->dirty = 1;
-
-		          //write minode to disk
-		          iput(parentMinode);
-		      }
-
-		      prevDir = dp;
-		      cp += dp->rec_len;
-		      dp = (DIR*)cp;
-		  }
-		  
-		  //success
-		  return 0;
-    }
-    else
-    
-    return 1;
+							prevdp = dp;
+							cp += dp->rec_len;
+							dp = (DIR*)cp;
+					}
+				}
+				
+				return 0;
+			}
+	  }
+	  
+	  //unsuccessful rmdir
+	  return 1;
 }
 
 #endif

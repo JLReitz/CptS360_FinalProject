@@ -5,7 +5,6 @@
 
 // Global Variables *******************************************************************************
 
-extern char _buf[BLKSIZE];
 extern MNTABLE * _mntPtr;
 
 // Prototypes *************************************************************************************
@@ -27,22 +26,22 @@ INODE * get_inode(int dev, int ino, char buf[])
 	return (INODE *)buf + offset;
 }
 
-int put_inode(int dev, int ino, INODE * inode_fresh)
+int put_inode(int dev, int ino, INODE * inode)
 {
 	int blk = _mntPtr->iblk + (ino-1)/8;
 	int offset = (ino-1)%8;
 	char ibuf[BLKSIZE];
 	INODE * inode_stale;
 	
-	//Get the block where the inode exists
-	get_block(dev, blk, ibuf);
-	inode_stale = (INODE *)ibuf + offset;
+	//Read in the old inode
+	get_block(dev, ino, ibuf);
+	inode_stale = (INODE *)ibuf;
 	
-	//Rewrite the inode
-	*inode_stale = *inode_fresh;
+	//Set the old inode equal to the new inode
+	*inode_stale = *inode;
 	
-	//Replace the block
-	put_block(dev, blk, ibuf);
+	//Write the inode to its respective block
+	put_block(dev, ino, ibuf);
 }
 
 #endif

@@ -56,6 +56,8 @@ int getino(int dev, char * pathname)
 		minode = iget(dev, ino); //Set minode to the next step that was found
 	}
 	
+	iput(minode);
+	
 	return ino; //Return the found ino
 }
 

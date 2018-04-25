@@ -185,11 +185,15 @@ void quit()
   int i;
   MINODE *mip;
   
+  //Close process0
+  iput(_running->cwd);
+  
+  //Close the rest of the inodes
   for (i=0; i<NMINODE; i++)
   {
     mip = &_minode[i];
-    if (mip->refCount > 0)
-    	iput(mip);
+    
+    iput(mip);
   }
   
   exit(0);

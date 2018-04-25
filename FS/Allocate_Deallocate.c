@@ -46,20 +46,18 @@ int balloc(int dev){
 
 int idealloc(int dev, int ino){
     char buf[BLKSIZE];
-    //int byte, bit;
+    int byte, bit;
     //SUPER *sp;
     //GD *gp;
 
     get_block(dev, _mntPtr->imap, buf);
 		
-		free_bit(buf, ino);
-		//Same below as this function?
-		/*
+		//free_bit(buf, ino);
+		//The above function should do the same, but was truncating buf for some reason
     byte = ino / 8;
     bit = ino % 8;
 
     buf[byte] &= ~(1 << bit);
-    */
 
     put_block(dev, _mntPtr->imap, buf);
 		
@@ -85,14 +83,12 @@ int bdealloc(int dev, int blk){
 
     get_block(dev, _mntPtr->bmap, buf);
     
-    free_bit(buf, blk);
-    //Same below as this function?
-		/*
-    byte = ino / 8;
-    bit = ino % 8;
+    //free_bit(buf, blk);
+   	//The above function should do the same, but was truncating buf for some reason
+    byte = blk / 8;
+    bit = blk % 8;
 
     buf[byte] &= ~(1 << bit);
-    */
 
     put_block(dev, _mntPtr->bmap, buf);
 		
