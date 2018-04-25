@@ -165,7 +165,27 @@ int Symlink(char *oldPathname, char *newPathname){
   iput(linkMinode);
 }
 
-int Readlink(char *pathname){
-  
+int Readlink(char *pathname, char* container){
+  int ino;
+  MINODE * minode;
+  INODE *inode;
+  container = "";
+
+  //load pathname inode into memory
+  ino = getino(dev, pathname);
+  minode = iget(dev, ino);
+  inode = &minode->INODE;
+
+  //check if sym link
+  if(!S_ISLNK(inode->i_mode)){
+    printf("not a link file\n");
+    return 1;
+  }
+
+  //return contents of i blocks
+  for(int i = 0; i < 12; i++){
+    strcat(container, inode->i_block[i]);
+  }
+  return 0;
 }
 
