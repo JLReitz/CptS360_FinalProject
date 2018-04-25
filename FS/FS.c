@@ -39,8 +39,8 @@ void quit();
 
 //Function pointers ********************************************************************************
 
-void (*functions_0arg[])() = {pwd, quit};
-void (*functions_1arg[])(char *) = {ls, cd};
+void (*functions_0arg[])() = {pwd, quit};ls
+void (*functions_1arg[])(char *) = {ls, cd, mycreat, mymkdir, myrmdir};
 
 // Functions ***************************************************************************************
 

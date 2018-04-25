@@ -10,12 +10,12 @@
 extern PROC * _running;
 
 //Prototypes
-int mycreat(char *pathname);
+void mycreat(char *pathname);
 int createFile(MINODE *parentMinode, char* fileName);
 int enterName(MINODE *parentMinode, int ino, char *name);
 
 
-int mycreat(char *pathname){
+void mycreat(char *pathname){
     //local variables
     char *path[16];
     char *filePath = "";
@@ -68,7 +68,7 @@ int mycreat(char *pathname){
 					iput(filePathMinode);
 
 					//Successful creat
-					return 0;
+					return;
 				}
 				else
 					printf("This file already exists.\n");
@@ -78,9 +78,6 @@ int mycreat(char *pathname){
     }
     else
     	printf("The specified path does not exist.\n");
-    	
-    //Unsuccessful creat
-    return 1;
 }
 
 int createFile(MINODE *parentMinode, char* fileName){

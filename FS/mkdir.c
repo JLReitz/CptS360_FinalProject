@@ -10,10 +10,10 @@
 //local globals
 extern PROC *_running;
 
-int mymkdir(char * pathname);
+void mymkdir(char * pathname);
 int createDir(MINODE *parentInode, char* dirName);
 
-int mymkdir(char *pathname){
+void mymkdir(char *pathname){
     //local variables
     char *path[16];
     char *dirPath = "";
@@ -64,7 +64,7 @@ int mymkdir(char *pathname){
 					iput(dirPathMinode);
 
 					//successful mkdir 
-					return 0;
+					return;
 				}
 				else
 					printf("This directory already exists.\n");
@@ -74,9 +74,6 @@ int mymkdir(char *pathname){
     }
     else
     	printf("The path specified does not exist.\n");
-    	
-    //Unsuccessful mkdir
-    return 1;
 }
 
 int createDir(MINODE *parentInode, char* dirName){

@@ -4,7 +4,7 @@
 #include "Util.c"
 #include "mkdir.c"
 
-extern PROC running;
+extern PROC * _running;
 extern int dev = running->cwd->dev;
 
 int Link(char *oldPathname, char*newPathname){
@@ -20,7 +20,7 @@ int Link(char *oldPathname, char*newPathname){
 
   //check old is not dir
   if(S_ISDIR(inodeOld->i_mode)){
-    printf("cannot link to dir\n");
+    printf("Cannot link to a directory.\n");
     return 1;
   }
 
@@ -39,13 +39,13 @@ int Link(char *oldPathname, char*newPathname){
 
   //check if path exists
   if(!getino(dev, newPath)){
-    printf("new pathname does not exist\n");
+    printf("Supplied pathname does not exist.\n");
     return 1;
   }
 
   //check that name doesnt exist
   if(getino(dev, newPathname)){
-    printf("link name already exists\n");
+    printf("Link name already exists\n");
     return 1;
   }
 

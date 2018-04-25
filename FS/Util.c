@@ -4,12 +4,12 @@
 #include "Type.h"
 
 #define NUM_0ARG_FUNCTIONS 2
-#define NUM_1ARG_FUNCTIONS 2
+#define NUM_1ARG_FUNCTIONS 5
 
 // GLobal Variables ********************************************************************************
 
 char * functions_0arg_str[NUM_0ARG_FUNCTIONS] = {"pwd", "quit"};
-char * functions_1arg_str[NUM_1ARG_FUNCTIONS] = {"ls", "cd"};
+char * functions_1arg_str[NUM_1ARG_FUNCTIONS] = {"ls", "cd", "creat", "mkdir", "rmdir"};
 
 // Prototypes **************************************************************************************
 

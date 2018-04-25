@@ -9,12 +9,12 @@
 extern PROC * _running;
 
 //Prototypes
-int myrmdir(char *pathname);
+void myrmdir(char *pathname);
 int rmChild(MINODE *parentMinode, char *name);
 int rmChild(MINODE *parentMinode, char *name);
 
 
-int myrmdir(char *pathname){
+void myrmdir(char *pathname){
     int ino, parentIno;
     MINODE *mip, *pmip;
     char * dirName, * path[16], * dirPath, * pathnameTemp = pathname;
@@ -69,7 +69,7 @@ int myrmdir(char *pathname){
 				iput(mip);
 
 				//success
-				return 0;
+				return;
 		  }
 		  else
 		  printf("The specified directory does not exist.\n");
@@ -77,9 +77,7 @@ int myrmdir(char *pathname){
     }
     else
     	printf("The specified path does not exist.\n");
-    
-    //Unsuccessful rmdir
-    return 1;
+
 }
 
 int rmChild(MINODE *parentMinode, char *name){
@@ -157,7 +155,7 @@ int rmChild(MINODE *parentMinode, char *name){
 					}
 				}
 				
-				return 0;
+				return;
 			}
 	  }
 	  
