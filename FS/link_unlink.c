@@ -71,7 +71,7 @@ int Link(char *oldPathname, char*newPathname){
 }
 
 int Unlink(char *pathname){
-  char *path[16], *dirPath = "", *dirName; 
+  char *path[16], *dirPath = "", *dirName, buf[_BLKSIZE]; 
   int ino, parentIno;
   INODE *inode, *parentInode;
   MINODE *minode, *parentMinode;
@@ -160,13 +160,17 @@ int Symlink(char *oldPathname, char *newPathname){
 
   linkInode->i_block[0] = oldPathname; //NOT SURE ABOUT THIS
 
+  strcpy(buf, oldPathname);
+
+  put_block(dev, linkInode->i_block[0], buf);
+
   linkMinode->dirty = 1;
 
   iput(linkMinode);
 }
 
 int Readlink(char *pathname, char* container){
-  int ino;
+  int ino, i = 0;
   MINODE * minode;
   INODE *inode;
   container = "";
@@ -183,8 +187,10 @@ int Readlink(char *pathname, char* container){
   }
 
   //return contents of i blocks
-  for(int i = 0; i < 12; i++){
-    strcat(container, inode->i_block[i]);
+  while(inode->i_block[i]){
+    get_block(dev, inode->i_block[i], buf);  
+    strcat(container, buf);
+    i++;
   }
   return 0;
 }
