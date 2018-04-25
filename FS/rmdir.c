@@ -1,77 +1,97 @@
 #include "Block_Data.c"
+#include "Inode_Data.c"
 #include "Inode_Util.c"
-#include "Util.c"
 #include <time.h>
 
 #ifndef RMDIR_C
 #define RMDIR_C
 
-extern _PROC * _running;
-extern int _blocksize;
-int dev = _running->cwd->dev;
+extern PROC * _running;
 
-int rmdir(char *pathname){
+//Prototypes
+int myrmdir(char *pathname);
+int rmChild(MINODE *parentMinode, char *name);
+int rmChild(MINODE *parentMinode, char *name);
+
+
+int myrmdir(char *pathname){
     int ino, parentIno;
     MINODE *mip, *pmip;
-    INODE *ip, *pip;
-    char dirName, path[16], dirPath, pathnameTemp = pathname;
+    char * dirName, * path[16], * dirPath, * pathnameTemp = pathname;
 
-    //tokenize pathname
+   //tokenize pathname
    int numberOfDirs = tokenize(path, pathname, "/");
 
-    //cat to dir path;
-    for(int i = 0; i < numberOfDirs-2; i++){
-        strcat(dirPath, "/");
-        strcat(dirPath, path[i]);
+	  if(numberOfDirs > 1)
+	  {
+		  //cat to dir path;
+		  for(int i = 0; i < numberOfDirs-2; i++){
+		      strcat(dirPath, "/");
+		      strcat(dirPath, path[i]);
+		  }
+		  
+		  dirName = path[numberOfDirs - 1];
+    }
+    else
+    {
+    	dirPath = ".";
+    	dirName = pathname;
     }
 
     //get ino
-    parentIno = getino(dev, dirPath);
+    parentIno = getino(_running->cwd->dev, dirPath);
 
     //get minode 
-    pmip = iget(dev, parentIno);
+    if(pmip = iget(_running->cwd->dev, parentIno))
+    {
+		  //get child ino and inode
+		  if(ino = getino(_running->cwd->dev, pathnameTemp))
+		  {
+				mip = iget(_running->cwd->dev , ino);			
+				
+				//deallocate block and inode
+				for(int i = 0; i <= 14; i++){
+				    bdealloc(_running->cwd->dev, mip->INODE.i_block[i]);
+				}
 
-    //check for dir, check if busy, check if empty
-    
-    //get child ino and inode
-    ino = getino(dev, pathnameTemp);
-    mip = iget(dev , ino);
+				idealloc(_running->cwd->dev, ino);
 
-    //make sure that exits
+				//remove child's entry
+				rmChild(pmip, dirName);
 
-    //deallocate block and inode
-    for(int i = 0; i <= 14; i++){
-        bdealloc(dev, ip->i_block[i]);
+				//decrement parent's inode link by 1
+				pmip->INODE.i_links_count--;
+
+				//update parent time, make dirty
+				pmip->INODE.i_atime = pmip->INODE.i_ctime = time(0L);
+				pmip->dirty = 1;
+
+				//write back to disk
+				iput(mip);
+
+				//success
+				return 0;
+		  }
+		  else
+		  printf("The specified directory does not exist.\n");
+		  
     }
-
-    idealloc(dev, ino);
-
-    //remove child's entry
-    rmChild(pmip, dirName);
-
-    //decrement parent's inode link by 1
-    pip->i_links_count--;
-
-    //update parent time, make dirty
-    pip->i_atime = pip->i_ctime = time(0L)
-    pmip->dirty = 1;
-
-    //write back to disk
-    iput(mip);
-
-    //success
-    return 0;
+    else
+    	printf("The specified path does not exist.\n");
+    
+    //Unsuccessful rmdir
+    return 1;
 }
 
 int rmChild(MINODE *parentMinode, char *name){
-    INODE *pip = parentMinode->INODE;
+    INODE *pip = &parentMinode->INODE;
     DIR *dp, *prevDir, *lastDir;
-    char buf[_blocksize], *cp, *dirName, *lastChar;
+    char buf[BLKSIZE], *cp, *dirName, *lastChar;
     int ino, start, end;
 
     //search inode for name
     if(ino = isearch_ino(parentMinode, name)){
-		  get_block(dev, ino, buf);
+		  get_block(_running->cwd->dev, ino, buf);
 
 		  //erase name entry
 		  cp = buf;
@@ -86,22 +106,22 @@ int rmChild(MINODE *parentMinode, char *name){
 		          //if first entry
 		          if(cp == buf && dp->rec_len == buf + 1024){
 		              
-		              free(buf);
-		              bdealloc(dev, ino);
-		              pip->i_size -= _blocksize;
+		              int i = 0;
+		              bdealloc(_running->cwd->dev, ino);
+		              pip->i_size -= BLKSIZE;
 		              
-		            //any blocks after need to be moved up
-		          	while(pip->i_block[i + l] && i+1 < 12){
-						  i++;
-						  get_block(dev, pip->i_block[i], buf);
-						  put_block(dev, pip->i_blocks[i-1], buf);
-					  }		
+		          //any blocks after need to be moved up
+		        	while(pip->i_block[i + 1] && i+1 < 12){
+								i++;
+								get_block(_running->cwd->dev, pip->i_block[i], buf);
+								put_block(_running->cwd->dev, pip->i_block[i-1], buf);
+					  	}		
 		          }
 		          //if last entry
 		          else if(cp + dp->rec_len == buf + 1024){
 
 		              prevDir += dp->rec_len;
-		              put_block(dev, ino, buf);
+		              put_block(_running->cwd->dev, ino, buf);
 
 		          }
 		          //if in the middle
@@ -113,7 +133,7 @@ int rmChild(MINODE *parentMinode, char *name){
 		              //go to last entry
 		              while(lastChar < buf + 1024){
 		                  lastChar += lastDir->rec_len;
-		                  lastDir = (DIRr*)lastChar;
+		                  lastDir = (DIR*)lastChar;
 		              }
 
 		              lastDir->rec_len = dp->rec_len;
@@ -126,7 +146,7 @@ int rmChild(MINODE *parentMinode, char *name){
 		              memmove(cp, start, end-start);
 
 		              //write back block
-		              put_block(dev, ino, buf);
+		              put_block(_running->cwd->dev, ino, buf);
 		          }
 
 		          //mark parent minode dirty

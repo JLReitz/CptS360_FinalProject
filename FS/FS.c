@@ -9,13 +9,15 @@
 #include "pwd.c"
 #include "ls.c"
 #include "cd.c"
+#include "mkdir.c"
+#include "rmdir.c"
 
 // Global Variables ********************************************************************************
 
 int _dev;
 int _nblocks, _ninodes, _bmap, _imap, _iblk;
 char _line[128], _buf[BLKSIZE];
-char * _cwd;
+char _cwd[BLKSIZE];
 char * _cmd[32];
 
 
@@ -76,18 +78,19 @@ void mount_root(char * diskname)
 {  
 	printf("MOUNTING...\n");	
 	
-  _root = iget(_dev, 2);
-  _root->mounted = 1;
-  _root->mptr = &_mntable;
-
-  _mntPtr = &_mntable;
+	_mntPtr = &_mntable;
   _mntPtr->dev = _dev;
   _mntPtr->ninodes = _ninodes;
   _mntPtr->nblocks = _nblocks;
   _mntPtr->bmap = _bmap;
   _mntPtr->imap = _imap;
   _mntPtr->iblk = _iblk;
+	
+  _root = iget(_dev, 2);
+  _root->mounted = 1;
+  _root->mptr = &_mntable;
   _mntPtr->mntDirPtr = _root;
+  
   strcpy(_mntPtr->devName, diskname);
   strcpy(_mntPtr->mntName, "/");
 }
@@ -135,10 +138,8 @@ void run_FS(char * disk)
 	printf("creating Process 0 as running process\n");
 	_running = &_proc[0];
 	_running->cwd = iget(_dev, 2);
-	printf("Root inodes refCount = %d\n", _root->refCount);
-
-	//printf("hit a key to continue : ");
-	//getchar();
+	strcpy(_cwd, "/");
+	printf("Root inodes refCount = %d\n\n", _root->refCount);
 	
 	//Now take user input commands
 	while(1)

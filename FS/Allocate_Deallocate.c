@@ -3,23 +3,20 @@
 
 #include "Block_Data.c"
 
-extern int _imap;
-extern int _bmap;
-extern int _ninodes;
-extern int _nblocks;
+extern MNTABLE * _mntPtr;
 
 int ialloc(int dev){
     char buf[BLKSIZE];
 
-    get_block(dev, _imap, buf);
+    get_block(dev, _mntPtr->imap, buf);
 
-    for(int i = 0; i < _ninodes; i++){
+    for(int i = 0; i < _mntPtr->ninodes; i++){
 
         if(!tst_bit(buf, i)){
 
             set_bit(buf, i);
             dec_FreeInodes(dev);
-            put_block(dev, _imap, buf);
+            put_block(dev, _mntPtr->imap, buf);
 
             return i+1;
         }
@@ -31,13 +28,13 @@ int ialloc(int dev){
 int balloc(int dev){
     char buf[BLKSIZE];
 
-    get_block(dev, _bmap, buf);
+    get_block(dev, _mntPtr->bmap, buf);
 
-    for(int i = 0; i < _nblocks; i++){
+    for(int i = 0; i < _mntPtr->nblocks; i++){
         if(!tst_bit(buf, i)){
 
             set_bit(buf,i);
-            put_block(dev, _bmap, buf);
+            put_block(dev, _mntPtr->bmap, buf);
             dec_FreeBlocks(dev);
 
             return i + 1;
@@ -53,7 +50,7 @@ int idealloc(int dev, int ino){
     //SUPER *sp;
     //GD *gp;
 
-    get_block(dev, _imap, buf);
+    get_block(dev, _mntPtr->imap, buf);
 		
 		free_bit(buf, ino);
 		//Same below as this function?
@@ -64,7 +61,7 @@ int idealloc(int dev, int ino){
     buf[byte] &= ~(1 << bit);
     */
 
-    put_block(dev, _imap, buf);
+    put_block(dev, _mntPtr->imap, buf);
 		
 		inc_FreeInodes(dev);
 		//Same below as this function?
@@ -86,7 +83,7 @@ int bdealloc(int dev, int blk){
     SUPER *sp;
     GD *gp;
 
-    get_block(dev, _bmap, buf);
+    get_block(dev, _mntPtr->bmap, buf);
     
     free_bit(buf, blk);
     //Same below as this function?
@@ -97,7 +94,7 @@ int bdealloc(int dev, int blk){
     buf[byte] &= ~(1 << bit);
     */
 
-    put_block(dev, _bmap, buf);
+    put_block(dev, _mntPtr->bmap, buf);
 		
 		inc_FreeBlocks(dev);
 }

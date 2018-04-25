@@ -11,20 +11,21 @@ extern PROC * _running;
 
 // Prototypes **************************************************************************************
 
-void pwd(char * pathname);
+void pwd();
 void pwd_recursive(MINODE * dir);
 
 // Functions ***************************************************************************************
 
-void pwd(char * pathname)
+void pwd()
 {
 	pwd_recursive(_running->cwd);
+	printf("\n");
 }
 
 void pwd_recursive(MINODE * dir)
 {
 	int ino;
-	char * filename;
+	char filename[255];
 	INODE ip;
 	MINODE * mip;
 	
@@ -39,7 +40,7 @@ void pwd_recursive(MINODE * dir)
 		mip = iget(dir->dev, 2);
 		
 		//Load the name of the current directory
-		isearch_name(mip, 2, filename);
+		isearch_name(mip, dir->ino, filename);
 		printf("/%s", filename);
 		
 		return;
@@ -51,7 +52,7 @@ void pwd_recursive(MINODE * dir)
 		pwd_recursive(mip);
 		
 		//Load the name of the current directory
-		isearch_name(mip, isearch_ino(dir, "."), filename);
+		isearch_name(mip, dir->ino, filename);
 		printf("/%s", filename);
 		
 		return;

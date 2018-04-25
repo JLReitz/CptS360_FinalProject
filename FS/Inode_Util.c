@@ -6,9 +6,9 @@
 
 // Global Variables *******************************************************************************
 
-extern int _iblk;
 extern PROC * _running;
 extern MINODE _minode[NMINODE];
+extern MNTABLE * _mntPtr;
 
 // Prototypes *************************************************************************************
 
@@ -42,7 +42,7 @@ int getino(int dev, char * pathname)
 	//Tokenize the string
 	pathlength = tokenize(filenames, ibuf, "/");
 
-	for (i=0; i<pathlength-2; i++) //Loop through the steps in the pathname
+	for (i=0; i<pathlength; i++) //Loop through the steps in the pathname
 	{
 		ino = isearch_ino(minode, filenames[i]); //Search for the next branch in the path
 
@@ -52,6 +52,7 @@ int getino(int dev, char * pathname)
 		  return 0;
 		}
 		
+		iput(minode);
 		minode = iget(dev, ino); //Set minode to the next step that was found
 	}
 	
@@ -90,11 +91,7 @@ MINODE * iget(int dev, int ino)
 			mip->ino = ino;
 
 			//Get INODE of ino to buf    
-			blk  = (ino-1)/8 + _iblk;
-			disp = (ino-1)%8;
-			
-			get_block(dev, blk, buf);
-			ip = (INODE *)buf + disp;
+			ip = get_inode(dev, ino, buf);
 			
 			//Copy INODE to mp->INODE
 			mip->INODE = *ip;
@@ -132,7 +129,7 @@ int isearch_ino(MINODE * mip, char * filename)
 				while(cp < &ibuf[BLKSIZE])
 				{
 					//Compare filenames
-					if(!strncmp(dp->name, filename, dp->name_len))
+					if(!strcmp(dp->name, filename))
 						return dp->inode; //Return the inode number if this is the correct file
 					
 					//Increment cp and set dp to the next file in the directory
@@ -177,7 +174,7 @@ int isearch_name(MINODE * mip, int ino, char * filename)
 					//If this is the inode we're looking for
 					if(dp->inode == ino)
 					{
-						strcpy(filename, dp->name); //Copy the 
+						strcpy(filename, dp->name); //Copy the name
 						return 1;
 					}
 					
@@ -205,12 +202,10 @@ void iput(MINODE * mip)
 	{
 		mip->refCount--; //Decrease the refcount
 
-		if (mip->refCount > 0) //If the MINODE is supporting more than one inode 
+		if (mip->refCount > 0) //If the MINODE is accessed by more than one process
 		return; //Return
 		
-		if (!mip->dirty) //If the INODE hasn't been altered at all
-			return; //Return
-		else
+		if (mip->dirty) //If the INODE has been altered
 		{
 			//Write back
 			put_inode(mip->dev, mip->ino, &(mip->INODE));

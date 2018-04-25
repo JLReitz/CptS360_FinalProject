@@ -22,12 +22,16 @@ int find_1arg_function(char * cmd);
 int tokenize(char * path[], char * pathname, char * delimiter)
 {
 	//Set up
-	int tokens = 1;
-	path[tokens-1] = strtok(pathname, delimiter);
+	int tokens = 0;
 	
-	//Loop iteratively until the pathname has been toklenized completely
-	while((tokens < BLKSIZE) && (path[tokens-1] = strtok(0, delimiter)))
+	if(path[tokens] = strtok(pathname, delimiter))
+	{
 		tokens++;
+		
+		//Loop iteratively until the pathname has been toklenized completely
+		while((tokens < BLKSIZE) && (path[tokens] = strtok(0, delimiter)))
+			tokens++;
+	}
 	
 	return tokens;
 }

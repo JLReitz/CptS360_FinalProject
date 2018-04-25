@@ -13,7 +13,7 @@ extern PROC * _running;
 // Prototypes **************************************************************************************
 
 void ls(char * pathname);
-void print_Dir(int dev, int ino);
+void print_Dir(int dev, INODE * inode);
 void print_file(int dev, int ino);
 
 // Functions ***************************************************************************************
@@ -23,24 +23,21 @@ void ls(char * pathname)
 	if(pathname) //If the pathname is specified
 	{
 		//Go to that pathname and then print the directory
-		int ino = getino(_running->cwd->dev, pathname);
+		char ibuf[BLKSIZE];
+		INODE * inode = get_inode(_running->cwd->dev, getino(_running->cwd->dev, pathname), ibuf);
 		
-		print_Dir(_running->cwd->dev, ino);
+		print_Dir(_running->cwd->dev, inode);
 	}
 	else //Otherwise print cwd
-		print_Dir(_running->cwd->dev, _running->cwd->ino);
+		print_Dir(_running->cwd->dev, &_running->cwd->INODE);
 }
 
-void print_Dir(int dev, int ino)
+void print_Dir(int dev, INODE * inode)
 {
 	int i;
-	INODE * inode;
 	char buf[BLKSIZE];
 	
-	//Grab inode
-	get_inode(dev, ino, inode);
-	
-	//Check for if the supplied inolsde is a directory
+	//Check for if the supplied inode is a directory
 	if(inode->i_mode == 16877)
 	{
 		//Access every data block that this directory contains

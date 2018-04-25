@@ -6,7 +6,7 @@
 
 // Global Variables ********************************************************************************
 
-extern char * _cwd;
+extern char _cwd[BLKSIZE];
 extern PROC * _running;
 
 // Prototypes **************************************************************************************
@@ -42,13 +42,13 @@ void cd(char * pathname)
 void update_cwd(MINODE * dir)
 {
 	int ino;
-	char * filename;
+	char filename[255];
 	INODE ip;
 	MINODE * mip;
 	
 	if(dir->ino == 2)
 	{
-		_cwd = "/";
+		strcpy(_cwd, "/");
 		return;
 	}
 	
@@ -57,8 +57,8 @@ void update_cwd(MINODE * dir)
 		mip = iget(dir->dev, 2);
 		
 		//Load the name of the current directory
-		isearch_name(mip, 2, filename);
-		_cwd = "/";
+		isearch_name(mip, dir->ino, filename);
+		sprintf(_cwd, "/%s", filename);
 		
 		return;
 	}
@@ -69,7 +69,7 @@ void update_cwd(MINODE * dir)
 		pwd_recursive(mip);
 		
 		//Load the name of the current directory
-		isearch_name(mip, isearch_ino(dir, "."), filename);
+		isearch_name(mip, dir->ino, filename);
 		strcat(_cwd, filename);
 		
 		return;
