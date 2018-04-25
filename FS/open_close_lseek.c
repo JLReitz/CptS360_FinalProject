@@ -1,4 +1,6 @@
 #include "Type.h"
+#include "Allocate_Deallocate.c"
+#include <time.h>
 
 extern int _bufsize;
 extern OFT _OpenFileTable[NOFT];
@@ -112,7 +114,7 @@ int close_file(int fd){
     return 0;
 }
 
-int lseek(int fd, int position){
+int mylseek(int fd, int position){
     OFT *oft;
     int orgPos;
 
@@ -139,12 +141,51 @@ int lseek(int fd, int position){
 }
 
 int truncate(MINODE *mip){
+    int buf[256], indirectBuf[256];
+    INODE *inode = &mip->INODE;
 
     //release inode data blocks
+    //direct blocks
+    for(int i = 0; i < 12; i++){
+        if(inode->i_block[i])
+            bdealloc(dev, inode->i_block[i]);
+    }
+
+    //indirect
+    if(inode->i_block[12]){
+        
+        get_block(dev, inode->i_block[12], buf);
+
+        for (int i = 0; i < 256; j++){
+            if(buf[j])
+                bdealloc(dev, buf);
+        }
+    }
+
+    //doube indirect
+    if(inode->i_block[13]){
+
+        get_block(dev, inode->i_block[13], buf);
+
+        for(int i = 0; i < 256; i++){
+
+            get_block(dev, buf[i], indirectBuf);
+            for(int j = 0; j < 256; j++){
+
+                if(indirectBuf[j])
+                    bdealloc(dev, indirectBuf);
+            }
+        }
+    }
 
     //update time field
+    inode->i_atime = inode->i_mtime = time(0L);
 
     //inode size = 0, mark dirty
+    inode->i_size = 0;
+    mip->dirty = 1;
+
+    return 0;
 }
 
 int printfd(){
