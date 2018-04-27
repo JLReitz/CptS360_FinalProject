@@ -11,6 +11,7 @@
 #include "cd.c"
 #include "mkdir.c"
 #include "rmdir.c"
+#include "link_unlink.c"
 
 // Global Variables ********************************************************************************
 
@@ -39,8 +40,9 @@ void quit();
 
 //Function pointers ********************************************************************************
 
-void (*functions_0arg[])() = {pwd, quit};ls
-void (*functions_1arg[])(char *) = {ls, cd, mycreat, mymkdir, myrmdir};
+void (*functions_0arg[])() = {pwd, quit};
+void (*functions_1arg[])(char *) = {ls, cd, mycreat, mymkdir, myrmdir, unlink, readlink};
+void (*functions_2arg[])(char *, char *) = {link, symlink};
 
 // Functions ***************************************************************************************
 
@@ -173,6 +175,13 @@ void run_FS(char * disk)
 				printf("This command does not exist.\n");
 			
 			break;
+		case 3:
+		
+			if((function = find_2arg_function(_cmd[0])) >= 0)
+				(*functions_2arg[function])(_cmd[1], _cmd[2]);
+			else
+				printf("This command does not exist.\n");
+				
 		default:
 		
 			break;

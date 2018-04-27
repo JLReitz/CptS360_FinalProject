@@ -17,8 +17,9 @@ int rmChild(MINODE *parentMinode, char *name);
 void myrmdir(char *pathname){
     int ino, parentIno;
     MINODE *mip, *pmip;
-    char * dirName, * path[16], * dirPath, * pathnameTemp = pathname;
+    char * dirName, * path[16], dirPath[BLKSIZE], pathnameTemp[BLKSIZE];
     
+   strcpy(pathnameTemp, pathname);
    int numberOfDirs = tokenize(path, pathname, "/");
 
 	  if(numberOfDirs > 1)
@@ -33,7 +34,7 @@ void myrmdir(char *pathname){
     }
     else
     {
-    	dirPath = ".";
+    	strcpy(dirPath, ".");
     	dirName = pathname;
     }
 
@@ -155,7 +156,7 @@ int rmChild(MINODE *parentMinode, char *name){
 					}
 				}
 				
-				return;
+				return 1;
 			}
 	  }
 	  

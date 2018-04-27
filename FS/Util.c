@@ -4,12 +4,14 @@
 #include "Type.h"
 
 #define NUM_0ARG_FUNCTIONS 2
-#define NUM_1ARG_FUNCTIONS 5
+#define NUM_1ARG_FUNCTIONS 7
+#define NUM_2ARG_FUNCTIONS 2
 
 // GLobal Variables ********************************************************************************
 
 char * functions_0arg_str[NUM_0ARG_FUNCTIONS] = {"pwd", "quit"};
-char * functions_1arg_str[NUM_1ARG_FUNCTIONS] = {"ls", "cd", "creat", "mkdir", "rmdir"};
+char * functions_1arg_str[NUM_1ARG_FUNCTIONS] = {"ls", "cd", "creat", "mkdir", "rmdir", "unlink", "readlink"};
+char * functions_2arg_str[NUM_1ARG_FUNCTIONS] = {"link", "symlink"};
 
 // Prototypes **************************************************************************************
 
@@ -56,6 +58,19 @@ int find_1arg_function(char * cmd)
 	for(i; i<NUM_1ARG_FUNCTIONS; i++)
 	{
 		if(!strcmp(cmd, functions_1arg_str[i]))
+			return i;
+	}
+	
+	return -1;
+}
+
+int find_2arg_function(char * cmd)
+{
+	int i = 0;
+	
+	for(i; i<NUM_2ARG_FUNCTIONS; i++)
+	{
+		if(!strcmp(cmd, functions_2arg_str[i]))
 			return i;
 	}
 	

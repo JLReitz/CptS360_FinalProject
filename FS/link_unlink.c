@@ -1,27 +1,73 @@
-#include "Type.h"
-#include "Block_Data.c"
-#include "Inode_Data.c"
-#include "Util.c"
-#include "mkdir.c"
+#ifndef LINK_UNLINK_C
+#define LINK_UNLINK_C
+
+#include <string.h>
 
 extern PROC * _running;
-extern int dev = running->cwd->dev;
 
-int Link(char *oldPathname, char*newPathname){
-  char *oldFile[16]; *newFile[16], *newPath = "", *newName;
+int truncate(MINODE *mip){
+    int buf[256], indirectBuf[256];
+    INODE *inode = &mip->INODE;
+
+    //release inode data blocks
+    //direct blocks
+    for(int i = 0; i < 12; i++){
+        if(inode->i_block[i])
+            bdealloc(_running->cwd->dev, inode->i_block[i]);
+    }
+
+    //indirect
+    if(inode->i_block[12]){
+        
+        get_block(_running->cwd->dev, inode->i_block[12], (char *)buf);
+
+        for (int i = 0; i < 256; i++){
+            if(buf[i])
+                bdealloc(_running->cwd->dev, buf[i]);
+        }
+    }
+
+    //doube indirect
+    if(inode->i_block[13]){
+
+        get_block(_running->cwd->dev, inode->i_block[13], (char *)buf);
+
+        for(int i = 0; i < 256; i++){
+
+            get_block(_running->cwd->dev, buf[i], (char *)indirectBuf);
+            for(int j = 0; j < 256; j++){
+
+                if(indirectBuf[j])
+                    bdealloc(_running->cwd->dev, indirectBuf[j]);
+            }
+        }
+    }
+
+    //update time field
+    inode->i_atime = inode->i_mtime = time(0L);
+
+    //inode size = 0, mark dirty
+    inode->i_size = 0;
+    mip->dirty = 1;
+
+    return 0;
+}
+
+void link(char *oldPathname, char*newPathname){
+  char *oldFile[16], *newFile[16], *newPath = "", *newName;
   int inoOld, inoNew, numberOfTokens;
   INODE *inodeOld, *inodeNew;
   MINODE *minodeOld, *minodeNew;
 
   //load old into memory
-  inoOld = getino(running->cwd, oldPathname);
-  minodeOld = iget(dev, inoOld);
+  inoOld = getino(_running->cwd->dev, oldPathname);
+  minodeOld = iget(_running->cwd->dev, inoOld);
   inodeOld = &minodeOld->INODE;
 
   //check old is not dir
   if(S_ISDIR(inodeOld->i_mode)){
     printf("Cannot link to a directory.\n");
-    return 1;
+    return;
   }
 
   //check new path exists but name does not
@@ -38,24 +84,24 @@ int Link(char *oldPathname, char*newPathname){
   newName = newFile[numberOfTokens-1];
 
   //check if path exists
-  if(!getino(dev, newPath)){
+  if(!getino(_running->cwd->dev, newPath)){
     printf("Supplied pathname does not exist.\n");
-    return 1;
+    return;
   }
 
   //check that name doesnt exist
-  if(getino(dev, newPathname)){
+  if(getino(_running->cwd->dev, newPathname)){
     printf("Link name already exists\n");
-    return 1;
+    return;
   }
 
   //load new into memory
-  inoNew = getino(dev, newPath);
-  minodeNew = iget(dev, inoNew);
+  inoNew = getino(_running->cwd->dev, newPath);
+  minodeNew = iget(_running->cwd->dev, inoNew);
   inodeNew = &minodeNew->INODE;
 
   //add entry to to new path data block with old ino
-  enterName(minodeNew, inoOld, newName)
+  enterName(minodeNew, inoOld, newName);
 
   //increment i_links of inode
   inodeOld->i_links_count++;
@@ -66,37 +112,41 @@ int Link(char *oldPathname, char*newPathname){
 
   iput(minodeNew);
   iput(minodeOld);
-
-  return 0;
 }
 
-int Unlink(char *pathname){
-  char *path[16], *dirPath = "", *dirName, buf[_BLKSIZE]; 
+void unlink(char *pathname){
+  char *path[16], filePath[BLKSIZE], *fileName, buf[BLKSIZE], pathnameTemp[BLKSIZE]; 
   int ino, parentIno;
   INODE *inode, *parentInode;
   MINODE *minode, *parentMinode;
 
-  
-  //make sure it's not a dir
- /* //tokenize new pathname
-  numberOfTokens = tokenize(path, Pathname, "/");
+ 	//tokenize new pathname
+  strcpy(pathnameTemp, pathname);
+	int numberOfDirs = tokenize(path, pathname, "/");
 
-  //cat to new dir path
-  for(int i = 0; i < numberOfTokens-2; i++){
+	if(numberOfDirs > 1)
+	{
+		//cat to dir path;
+		for(int i = 0; i < numberOfDirs-1; i++){
+			  strcat(filePath, "/");
+			  strcat(filePath, path[i]);
+		}
+		
+		fileName = path[numberOfDirs - 1];
+	}
+	else
+	{
+		strcpy(filePath, ".");
+		fileName = pathname;
+	}
 
-    strcat(dirPath, "/");
-    strcat(dirPath, path[i]);
-  }
-
-  dirName = path[numberOfTokens-1];*/
-
-  ino = getino(dev, pathname);
-  minode = iget(dev, ino);
+  ino = getino(_running->cwd->dev, pathname);
+  minode = iget(_running->cwd->dev, ino);
   inode = &minode->INODE;
 
   if(S_ISDIR(inode->i_mode)){
     printf("cannot unlink dir\n");
-    return 1;
+    return;
   }  
 
   //decremet inode link count
@@ -105,93 +155,93 @@ int Unlink(char *pathname){
 
   //remove inode if links = 0
   if(!inode->i_links_count){
-
-    //deallocate datablocks, inode
-    for(int i = 0; i < 12 && inode->i_block[i]; i++){
-
-      bdeallocate(dev, inode->i_block[i]);
-    }
-
-    idealloc(dev, ino);
+  
+  	truncate(minode);
   }
 
   //remove name from parent directory 
-  parentIno = getino(dev, pathname);
-  parentMinode = iget(dev, parentIno);
-  parentInode = parentMinode->INODE;
+  parentIno = getino(_running->cwd->dev, filePath);
+  parentMinode = iget(_running->cwd->dev, parentIno);
+  parentInode = &parentMinode->INODE;
 
-  rm_child(parentMinode, dirPath);
+  rmChild(parentMinode, fileName);
 
   parentInode->i_atime = parentInode->i_mtime = time(0L);
   parentMinode->dirty = 1;
   minode->dirty = 1;
   iput(minode);
   iput(parentMinode);
-
-  return 0;
 }
 
-int Symlink(char *oldPathname, char *newPathname){
+void symlink(char *oldPathname, char *newPathname){
   int oldIno, linkIno;
+  char linkTarget_pathname[60] = "/";
   INODE *oldInode, *linkInode;
   MINODE *oldMinode, *linkMinode;
 
   //verify old pathname
-  if(!oldIno = getino(dev, oldPathname)){
+  if(!(oldIno = getino(_running->cwd->dev, oldPathname))){
     printf("path does not exist\n");
-    return 1;
+    return;
   }
-  oldMinode = iget(dev, oldIno);
-  oldInode = oldMinode->INODE;
+  
+  strncat(linkTarget_pathname, oldPathname, 59);
+  
+  oldMinode = iget(_running->cwd->dev, oldIno);
+  oldInode = &oldMinode->INODE;
 
   //create new pathname file
-  if(creat(newPathname)){
-    printf("failed to create file\n");
-    return 1;
-  }
+  mycreat(newPathname);
 
   oldMinode->dirty = 1;
 
-  linkIno = getino(dev, newPathname);
-  linkMinode = iget(dev, linkIno);
-  linkInode = linkMinode->INODE;
+  linkIno = getino(_running->cwd->dev, newPathname);
+  linkMinode = iget(_running->cwd->dev, linkIno);
+  linkInode = &linkMinode->INODE;
 
   linkInode->i_mode = 0120000;
-
-  linkInode->i_block[0] = oldPathname; //NOT SURE ABOUT THIS
-
-  strcpy(buf, oldPathname);
-
-  put_block(dev, linkInode->i_block[0], buf);
+  
+  for(int j=0; j<60; j+=4)
+  {
+  	char cbuf[4] = {linkTarget_pathname[j], linkTarget_pathname[j+1], linkTarget_pathname[j+2], linkTarget_pathname[j+3]};
+  	
+  	memcpy(&linkInode->i_block[j/4], cbuf, 4);
+  }
 
   linkMinode->dirty = 1;
 
   iput(linkMinode);
 }
 
-int Readlink(char *pathname, char* container){
+void readlink(char *pathname){
   int ino, i = 0;
+  char buf[4];
   MINODE * minode;
   INODE *inode;
-  container = "";
 
   //load pathname inode into memory
-  ino = getino(dev, pathname);
-  minode = iget(dev, ino);
+  ino = getino(_running->cwd->dev, pathname);
+  minode = iget(_running->cwd->dev, ino);
   inode = &minode->INODE;
 
   //check if sym link
   if(!S_ISLNK(inode->i_mode)){
     printf("not a link file\n");
-    return 1;
+    return;
   }
 
   //return contents of i blocks
-  while(inode->i_block[i]){
-    get_block(dev, inode->i_block[i], buf);  
-    strcat(container, buf);
-    i++;
+  for(int i=0; i<15; i++)
+  {
+  	if(inode->i_block[i])
+  	{
+			memcpy(buf, &inode->i_block[i], 4);
+			
+			printf("%s", buf);
+  	}
   }
-  return 0;
+  
+  printf("\n");
 }
 
+#endif

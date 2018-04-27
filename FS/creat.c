@@ -18,29 +18,32 @@ int enterName(MINODE *parentMinode, int ino, char *name);
 void mycreat(char *pathname){
     //local variables
     char *path[16];
-    char *filePath = "";
+    char filePath[BLKSIZE];
     char *fileName;
     int numberOfDirs;
+    char pathnameTemp[BLKSIZE];
     INODE *filePathInode;
     MINODE *filePathMinode;
     int ino, bno;
 
-    //tokenize pathname
-    numberOfDirs = tokenize(path, pathname, "/");
+    strcpy(pathnameTemp, pathname);
 		
+    //tokenize pathname
+    numberOfDirs = tokenize(path, pathnameTemp, "/");
+
 		if(numberOfDirs > 1)
 		{
-		  //cat to dir path;
-		  for(int i = 0; i < numberOfDirs-2; i++){
+    	//cat to dir path;
+		  for(int i = 0; i < numberOfDirs-1; i++){
 		      strcat(filePath, "/");
 		      strcat(filePath, path[i]);
 		  }
-		  
+
 		  fileName = path[numberOfDirs - 1];
     }
     else
     {
-    	filePath = ".";
+    	strcpy(filePath, ".");
     	fileName = pathname;
     }
 

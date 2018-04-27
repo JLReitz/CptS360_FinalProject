@@ -76,13 +76,13 @@ int main(int argc, char * argv[])
 	printf("Root inodes refCount = %d\n\n", _root->refCount);
 	
 	//Run test
-	printf("mkdir testdir\n");
-	mymkdir("testdir");
+	printf("creat testfile\n");
+	mycreat("testfile");
 	printf("ls: ");
 	ls(0);
 	
 	printf("mkdir X/testdir2\n");
-	mymkdir("X/testdir2");
+	mycreat("X/testfile2");
 	printf("ls X/: ");
 	ls("X");
 	

@@ -1,0 +1,1865 @@
+#include "FS/FS.c"
+
+void main(int argc, char * argv[])
+{
+#ifdef DEBUG_BASEFS
+	run_FS("../diskimage");
+	
+	exit(0);
+#endif
+
+	if(argc > 1)
+		run_FS(argv[1]);
+	else
+		printf("Please insert a virtual disk.\n");
+		
+	exit(0);
+}
+
+
+#ifndef FS_C
+#define FS_C
+
+#include "Block_Data.c"
+#include "Inode_Data.c"
+#include "Inode_Util.c"
+#include "Allocate_Deallocate.c"
+#include "Util.c"
+#include "pwd.c"
+#include "ls.c"
+#include "cd.c"
+#include "mkdir.c"
+#include "rmdir.c"
+#include "link_unlink.c"
+
+// Global Variables ********************************************************************************
+
+int _dev;
+int _nblocks, _ninodes, _bmap, _imap, _iblk;
+char _line[128], _buf[BLKSIZE];
+char _cwd[BLKSIZE];
+char * _cmd[32];
+
+
+MINODE * _root;
+MINODE _minode[NMINODE];
+
+MNTABLE _mntable, * _mntPtr;
+
+PROC   _proc[NPROC], * _running;
+
+OFT _OpenFileTable[NOFT];
+
+// Protoypes ***************************************************************************************
+
+void init();
+void mount_root(char * diskname);
+void run_FS(char * disk);
+void quit();
+
+//Function pointers ********************************************************************************
+
+void (*functions_0arg[])() = {pwd, quit};
+void (*functions_1arg[])(char *) = {ls, cd, mycreat, mymkdir, myrmdir, unlink, readlink};
+void (*functions_2arg[])(char *, char *) = {link, symlink};
+
+// Functions ***************************************************************************************
+
+void init()
+{
+  int i, j;
+  MINODE *mip;
+  PROC   *p;
+
+  printf("INITIALIZING...\n");
+
+  for (i=0; i<NMINODE; i++)
+  {
+    mip = &_minode[i];
+    mip->dev = mip->ino = 0;
+    mip->refCount = 0;
+    mip->mounted = 0;
+    mip->mptr = 0;
+  }
+  
+  for (i=0; i<NPROC; i++)
+  {
+  
+    p = &_proc[i];
+    p->pid = i;
+    p->uid = 0;
+    p->cwd = 0;
+    
+    for (j=0; j<NFD; j++)
+      p->fd[j] = 0;
+  }
+} 
+
+void mount_root(char * diskname)
+{  
+	printf("MOUNTING...\n");	
+	
+	_mntPtr = &_mntable;
+  _mntPtr->dev = _dev;
+  _mntPtr->ninodes = _ninodes;
+  _mntPtr->nblocks = _nblocks;
+  _mntPtr->bmap = _bmap;
+  _mntPtr->imap = _imap;
+  _mntPtr->iblk = _iblk;
+	
+  _root = iget(_dev, 2);
+  _root->mounted = 1;
+  _root->mptr = &_mntable;
+  _mntPtr->mntDirPtr = _root;
+  
+  strcpy(_mntPtr->devName, diskname);
+  strcpy(_mntPtr->mntName, "/");
+}
+
+void run_FS(char * disk)
+{
+	int argc, function;
+
+	if ((_dev = open(disk, O_RDWR)) < 0)
+	{
+		printf("open %s failed\n", disk);
+		return;
+	}
+
+	//Read super block at 1024
+	get_block(_dev, 1, _buf);
+	SUPER * sp = (SUPER *)_buf;
+	
+	//Verify that this is an ext32 filesystem
+	printf("checking EXT2 FS...");
+	if (sp->s_magic != 0xEF53)
+	{
+		printf("magic = %x is not an ext2 filesystem\n", sp->s_magic);
+		return;
+	}
+	printf("EXT2 FS confirmed.\n"); 
+	
+	_ninodes = sp->s_inodes_count;
+	_nblocks = sp->s_blocks_count;
+	
+	//Get group0 information
+	get_block(_dev, 2, _buf); 
+	GD * gp = (GD *)_buf;
+
+	_bmap = gp->bg_block_bitmap;
+	_imap = gp->bg_inode_bitmap;
+	_iblk = gp->bg_inode_table;
+	printf("bmp=%d _imap=%d _iblk = %d\n", _bmap, _imap, _iblk);
+	
+	//Initialize the filesystem and mount it
+	init();  
+	mount_root(disk);
+	
+	//Create Process 0
+	printf("creating Process 0 as running process\n");
+	_running = &_proc[0];
+	_running->cwd = iget(_dev, 2);
+	strcpy(_cwd, "/");
+	printf("Root inodes refCount = %d\n\n", _root->refCount);
+	
+	//Now take user input commands
+	while(1)
+	{
+		printf("%s >> ", _cwd);
+		fgets(_line, 128, stdin);
+		
+		//Replace newline character
+		_line[strlen(_line)-1] = 0;
+
+		if (_line[0]==0)
+			continue;
+		
+		argc = tokenize(_cmd, _line, " ");
+		
+		switch(argc)
+		{
+		case 1:
+			
+			if((function = find_0arg_function(_cmd[0])) >= 0)
+				(*functions_0arg[function])();
+			else
+				printf("This command does not exist.\n");
+			
+			break;
+		case 2:
+			
+			if((function = find_1arg_function(_cmd[0])) >= 0)
+				(*functions_1arg[function])(_cmd[1]);
+			else
+				printf("This command does not exist.\n");
+			
+			break;
+		case 3:
+		
+			if((function = find_2arg_function(_cmd[0])) >= 0)
+				(*functions_2arg[function])(_cmd[1], _cmd[2]);
+			else
+				printf("This command does not exist.\n");
+				
+		default:
+		
+			break;
+		}
+	}
+}
+
+void quit()
+{
+  int i;
+  MINODE *mip;
+  
+  //Close process0
+  iput(_running->cwd);
+  
+  //Close the rest of the inodes
+  for (i=0; i<NMINODE; i++)
+  {
+    mip = &_minode[i];
+    
+    iput(mip);
+  }
+  
+  exit(0);
+}
+
+#endif
+
+
+#ifndef TYPE_H
+#define TYPE_H
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <string.h>
+#include <libgen.h>
+#include <sys/stat.h>
+#include <ext2fs/ext2_fs.h> 
+
+//#define DEBUG_BASEFS
+
+#define BLKSIZE  1024
+#define ISIZE     128
+#define NMINODE    64
+#define NOFT       32
+#define NFD        16
+#define NPROC       2
+
+typedef unsigned char  u8;
+typedef unsigned short u16;
+typedef unsigned int   u32;
+
+typedef struct ext2_super_block SUPER;
+typedef struct ext2_group_desc  GD;
+typedef struct ext2_inode       INODE;
+typedef struct ext2_dir_entry_2 DIR;
+
+typedef struct minode{
+  INODE INODE;
+  int dev, ino;
+  int refCount;
+  int dirty;
+  int mounted;
+  struct mntable *mptr;
+}MINODE;
+
+typedef struct oft{
+  int  mode;
+  int  refCount;
+  MINODE *mptr;
+  int  offset;
+}OFT;
+
+typedef struct proc{
+  struct proc *next;
+  int          pid;
+  int          uid;
+  int          gid;
+  MINODE      *cwd;
+  OFT         *fd[NFD];
+}PROC;
+
+typedef struct mntable{
+  int dev;
+  int ninodes;
+  int nblocks;
+  int bmap;
+  int imap;
+  int iblk;
+  MINODE *mntDirPtr;
+  char devName[64];
+  char mntName[64];
+}MNTABLE;
+
+#endif
+
+
+#ifndef UTIL_C
+#define UTIL_C
+
+#include "Type.h"
+
+#define NUM_0ARG_FUNCTIONS 2
+#define NUM_1ARG_FUNCTIONS 7
+#define NUM_2ARG_FUNCTIONS 2
+
+// GLobal Variables ********************************************************************************
+
+char * functions_0arg_str[NUM_0ARG_FUNCTIONS] = {"pwd", "quit"};
+char * functions_1arg_str[NUM_1ARG_FUNCTIONS] = {"ls", "cd", "creat", "mkdir", "rmdir", "unlink", "readlink"};
+char * functions_2arg_str[NUM_1ARG_FUNCTIONS] = {"link", "symlink"};
+
+// Prototypes **************************************************************************************
+
+int tokenize(char * path[], char * pathname, char * delimiter);
+int find_0arg_function(char * cmd);
+int find_1arg_function(char * cmd);
+
+// Funcions ****************************************************************************************
+
+int tokenize(char * path[], char * pathname, char * delimiter)
+{
+	//Set up
+	int tokens = 0;
+	
+	if(path[tokens] = strtok(pathname, delimiter))
+	{
+		tokens++;
+		
+		//Loop iteratively until the pathname has been toklenized completely
+		while((tokens < BLKSIZE) && (path[tokens] = strtok(0, delimiter)))
+			tokens++;
+	}
+	
+	return tokens;
+}
+
+int find_0arg_function(char * cmd)
+{
+	int i = 0;
+	
+	for(i; i<NUM_0ARG_FUNCTIONS; i++)
+	{
+		if(!strcmp(cmd, functions_0arg_str[i]))
+			return i;
+	}
+	
+	return -1;
+}
+
+int find_1arg_function(char * cmd)
+{
+	int i = 0;
+	
+	for(i; i<NUM_1ARG_FUNCTIONS; i++)
+	{
+		if(!strcmp(cmd, functions_1arg_str[i]))
+			return i;
+	}
+	
+	return -1;
+}
+
+int find_2arg_function(char * cmd)
+{
+	int i = 0;
+	
+	for(i; i<NUM_2ARG_FUNCTIONS; i++)
+	{
+		if(!strcmp(cmd, functions_2arg_str[i]))
+			return i;
+	}
+	
+	return -1;
+}
+
+#endif
+
+
+#ifndef ALLOCATE_DEALLOCATE_C
+#define ALLOCATE_DEALLOCATE_C
+
+#include "Block_Data.c"
+
+extern MNTABLE * _mntPtr;
+
+int ialloc(int dev){
+    char buf[BLKSIZE];
+
+    get_block(dev, _mntPtr->imap, buf);
+
+    for(int i = 0; i < _mntPtr->ninodes; i++){
+
+        if(!tst_bit(buf, i)){
+
+            set_bit(buf, i);
+            dec_FreeInodes(dev);
+            put_block(dev, _mntPtr->imap, buf);
+
+            return i+1;
+        }
+    }
+    printf("No more inodes remaining on dev %d", dev);
+    return 0;
+}
+
+int balloc(int dev){
+    char buf[BLKSIZE];
+
+    get_block(dev, _mntPtr->bmap, buf);
+
+    for(int i = 0; i < _mntPtr->nblocks; i++){
+        if(!tst_bit(buf, i)){
+
+            set_bit(buf,i);
+            put_block(dev, _mntPtr->bmap, buf);
+            dec_FreeBlocks(dev);
+
+            return i + 1;
+        }
+    }
+    printf("No more free blocks on dev %d\n", dev);
+    return 0;
+}
+
+int idealloc(int dev, int ino){
+    char buf[BLKSIZE];
+    int byte, bit;
+    //SUPER *sp;
+    //GD *gp;
+
+    get_block(dev, _mntPtr->imap, buf);
+		
+		//free_bit(buf, ino);
+		//The above function should do the same, but was truncating buf for some reason
+    byte = ino / 8;
+    bit = ino % 8;
+
+    buf[byte] &= ~(1 << bit);
+
+    put_block(dev, _mntPtr->imap, buf);
+		
+		inc_FreeInodes(dev);
+		//Same below as this function?
+		/*
+    get_block(dev, 1, buf);
+    sp = (SUPER*)buf;
+    sp->s_free_inodes_count++;
+    put_block(dev, 1, buf);
+
+    get_block(dev, 2, buf);
+    gp->bg_free_inodes_count++;
+    put_block(dev, 2, buf);
+    */
+}
+
+int bdealloc(int dev, int blk){
+    char buf[BLKSIZE];
+    int byte, bit;
+    SUPER *sp;
+    GD *gp;
+
+    get_block(dev, _mntPtr->bmap, buf);
+    
+    //free_bit(buf, blk);
+   	//The above function should do the same, but was truncating buf for some reason
+    byte = blk / 8;
+    bit = blk % 8;
+
+    buf[byte] &= ~(1 << bit);
+
+    put_block(dev, _mntPtr->bmap, buf);
+		
+		inc_FreeBlocks(dev);
+}
+
+#endif
+
+
+#ifndef BLOCK_DATA_C
+#define BLOCK_DATA_C
+
+#include "Type.h"
+
+// Prototypes *************************************************************************************
+
+int free_bit(char buf[], int bit);
+int set_bit(char buf[], int bit);
+int tst_bit(char buf[], int bit);
+
+void dec_FreeBlocks(int dev);
+void inc_FreeBlocks(int dev);
+void dec_FreeInodes(int dev);
+void inc_FreeInodes(int dev);
+void get_block(int dev, int blk, char buf[]);
+void put_block(int dev, int blk, char buf[]);
+
+// Functions **************************************************************************************
+
+int free_bit(char buf[], int bit)
+{
+  int i = bit / 8; 
+  int j = bit % 8;
+  
+  buf[i] &= ~(1 << j);
+}
+
+int set_bit(char buf[], int bit)
+{
+  int i = bit / 8; 
+  int j = bit % 8;
+  
+  buf[i] |= (1 << j);
+}
+
+int tst_bit(char buf[], int bit)
+{
+  int i = bit / 8;
+  int j = bit % 8;
+  
+  if (buf[i] & (1 << j))
+     return 1;
+  else 
+  	return 0;
+}
+
+void dec_FreeBlocks(int dev)
+{
+	char bbuf[BLKSIZE];
+  SUPER * sp;
+  GD * gp;
+  
+  get_block(dev, 1, bbuf);
+  sp = (SUPER*)bbuf;
+  sp->s_free_blocks_count--;
+  put_block(dev, 1, bbuf);
+
+  get_block(dev, 2, bbuf);
+  gp = (GD*)bbuf;
+  gp->bg_free_blocks_count--;
+  put_block(dev, 2, bbuf);
+}
+
+void inc_FreeBlocks(int dev)
+{
+	char bbuf[BLKSIZE];
+  SUPER * sp;
+  GD * gp;	
+	
+  get_block(dev, 1, bbuf);
+  sp = (SUPER*)bbuf;
+  sp->s_free_blocks_count++;
+  put_block(dev, 1, bbuf);
+
+  get_block(dev, 2, bbuf);
+  gp = (GD*)bbuf;
+  gp->bg_free_blocks_count++;
+  put_block(dev, 2, bbuf);
+}
+
+void dec_FreeInodes(int dev)
+{
+  char bbuf[BLKSIZE];
+  SUPER * sp;
+  GD * gp;
+
+  //Decrement free_inodes count in SUPER and GD
+  get_block(dev, 1, bbuf);
+  sp = (SUPER *)bbuf;
+  sp->s_free_inodes_count--;
+  put_block(dev, 1, bbuf);
+
+  get_block(dev, 2, bbuf);
+  gp = (GD *)bbuf;
+  gp->bg_free_inodes_count--;
+  put_block(dev, 2, bbuf);
+}
+
+void inc_FreeInodes(int dev)
+{
+	char bbuf[BLKSIZE];
+  SUPER * sp;
+  GD * gp;
+
+  //Decrement free_inodes count in SUPER and GD
+  get_block(dev, 1, bbuf);
+  sp = (SUPER *)bbuf;
+  sp->s_free_inodes_count++;
+  put_block(dev, 1, bbuf);
+
+  get_block(dev, 2, bbuf);
+  gp = (GD *)bbuf;
+  gp->bg_free_inodes_count++;
+  put_block(dev, 2, bbuf);
+}
+
+void get_block(int dev, int blk, char buf[])
+{
+	lseek(dev, (long)blk*BLKSIZE, 0);
+  read(dev, buf, BLKSIZE);
+}
+
+void put_block(int dev, int blk, char buf[])
+{
+	lseek(dev, (long)blk*BLKSIZE, 0);
+  write(dev, buf, BLKSIZE);
+}
+
+#endif
+
+
+#ifndef INODE_DATA_C
+#define INODE_DATA_C
+
+#include "Block_Data.c"
+
+// Global Variables *******************************************************************************
+
+extern MNTABLE * _mntPtr;
+
+// Prototypes *************************************************************************************
+
+INODE * get_inode(int dev, int ino, char buf[]);
+int put_inode(int dev, int ino, INODE * inode);
+
+// Functions **************************************************************************************
+
+INODE * get_inode(int dev, int ino, char buf[])
+{
+	int blk = _mntPtr->iblk + (ino-1)/8;
+	int offset = (ino-1)%8;
+	
+	//Get the block where the inode exists
+	get_block(dev, blk, buf);
+	
+	//Now return the inode
+	return (INODE *)buf + offset;
+}
+
+int put_inode(int dev, int ino, INODE * inode)
+{
+	int blk = _mntPtr->iblk + (ino-1)/8;
+	int offset = (ino-1)%8;
+	char ibuf[BLKSIZE];
+	INODE * inode_stale;
+	
+	//Read in the old inode
+	get_block(dev, ino, ibuf);
+	inode_stale = (INODE *)ibuf;
+	
+	//Set the old inode equal to the new inode
+	*inode_stale = *inode;
+	
+	//Write the inode to its respective block
+	put_block(dev, ino, ibuf);
+}
+
+#endif
+
+
+#ifndef INODE_UTIL_C
+#define INODE_UTIL_C
+
+#include "Block_Data.c"
+#include "Util.c"
+
+// Global Variables *******************************************************************************
+
+extern PROC * _running;
+extern MINODE _minode[NMINODE];
+extern MNTABLE * _mntPtr;
+
+// Prototypes *************************************************************************************
+
+int getino(int dev, char * pathname);
+MINODE * iget(int dev, int ino);
+int isearch_ino(MINODE * mip, char * filename);
+int isearch_name(MINODE * mip, int ino, char * filename);
+
+void iput(MINODE * mip);
+void print_inode(int dev, int ino);
+
+// Functions **************************************************************************************
+
+int getino(int dev, char * pathname)
+{	  
+	int i, ino, blk, pathlength;
+	char ibuf[BLKSIZE];
+	char * filenames[BLKSIZE];
+	MINODE * minode;
+
+	if (!strcmp(pathname, "/")) //If the pathname points to root
+		return 2; //Return the root inode number
+
+	if (pathname[0]=='/') //If the pathname is absolute 
+		minode = iget(dev, 2); //Start with minode = root
+	else
+		minode = iget(_running->cwd->dev, _running->cwd->ino); //Otherwise start with mip = cwd
+
+	strcpy(ibuf, pathname);
+	
+	//Tokenize the string
+	pathlength = tokenize(filenames, ibuf, "/");
+
+	for (i=0; i<pathlength; i++) //Loop through the steps in the pathname
+	{
+		ino = isearch_ino(minode, filenames[i]); //Search for the next branch in the path
+
+		if (!ino) //If the ino returned is 0, we've reached the end of the path
+		{
+			iput(minode); //Discard minode
+		  return 0;
+		}
+		
+		iput(minode);
+		minode = iget(dev, ino); //Set minode to the next step that was found
+	}
+	
+	iput(minode);
+	
+	return ino; //Return the found ino
+}
+
+MINODE * iget(int dev, int ino)
+{  
+  int i, blk, disp;
+  char buf[BLKSIZE];
+  INODE * ip;
+  MINODE * mip;
+  
+	//Search the In-Memory Inode list (MINODE) list first to see if it's already been loaded
+	for (i=0; i<NMINODE; i++)
+	{
+		mip = &_minode[i];
+		
+		if ((mip->dev == dev) && (mip->ino == ino)) //If both dev and ino match up, then we've found it
+		{
+			 mip->refCount++;
+			 
+			 return mip;
+		}
+	}
+
+	//Otherwise look for the first empty minode
+	for (i=0; i<NMINODE; i++)
+	{
+		mip = &_minode[i];
+		
+		if (mip->refCount == 0)
+		{
+			mip->refCount = 1;
+			mip->dev = dev;
+			mip->ino = ino;
+
+			//Get INODE of ino to buf    
+			ip = get_inode(dev, ino, buf);
+			
+			//Copy INODE to mp->INODE
+			mip->INODE = *ip;
+			
+			return mip;
+		}
+	}
+	
+	return 0;
+}
+
+int isearch_ino(MINODE * mip, char * filename)
+{
+	int i;
+	char ibuf[BLKSIZE];
+	INODE inode = mip->INODE;
+		
+	//Check for if the supplied inode is a directory
+	if(inode.i_mode == 16877)
+	{
+		//Access every data block that this directory contains
+		for(i=0; i<12; i++)
+		{
+			//Use this INODE to find the data block number
+			u32 iblock = inode.i_block[i];
+			
+			if(iblock) //If the block number is 0, that block does not exist
+			{
+				//Read in the block and print the directory listing
+				get_block(mip->dev, iblock, ibuf);
+				
+				char * cp = ibuf; //Character pointer to hold the current position within the block
+				DIR * dp = (DIR *)ibuf;
+				
+				while(cp < &ibuf[BLKSIZE])
+				{
+					//Compare filenames
+					if(!strcmp(dp->name, filename))
+						return dp->inode; //Return the inode number if this is the correct file
+					
+					//Increment cp and set dp to the next file in the directory
+					cp += dp->rec_len;
+					dp = (DIR *)cp;
+				}
+			}
+		}
+		
+		return 0;
+	}
+	
+	printf("The file supplied was not a directory\n");
+	return 0;
+}
+
+int isearch_name(MINODE * mip, int ino, char * filename)
+{
+	int i = 0;
+	char ibuf[1024];
+	INODE inode = mip->INODE;
+	
+	//Check for if the supplied inode is a directory
+	if(inode.i_mode == 16877)
+	{
+		//Access every data block that this directory contains
+		for(i; i<12; i++)
+		{
+			//Use this INODE to find the data block number
+			u32 iblock = inode.i_block[i];
+			
+			if(iblock) //If the block number is 0, that block does not exist
+			{
+				//Read in the block and print the directory listing
+				get_block(mip->dev, iblock, ibuf);
+				
+				char * cp = ibuf; //Character pointer to hold the current position within the block
+				DIR * dp = (DIR *)ibuf;
+				
+				while(cp < &ibuf[BLKSIZE])
+				{
+					//If this is the inode we're looking for
+					if(dp->inode == ino)
+					{
+						strcpy(filename, dp->name); //Copy the name
+						return 1;
+					}
+					
+					//Increment cp and set dp to the next file in the directory
+					cp += dp->rec_len;
+					dp = (DIR *)cp;
+				}
+			}
+		}
+		
+		return 0;
+	}
+	
+	printf("The file supplied was not a directory\n");
+	return 0;
+}
+
+void iput(MINODE * mip)
+{
+	int i, block, offset;
+	char buf[BLKSIZE];
+	INODE * ip;
+
+	if(mip)
+	{
+		mip->refCount--; //Decrease the refcount
+
+		if (mip->refCount > 0) //If the MINODE is accessed by more than one process
+		return; //Return
+		
+		if (mip->dirty) //If the INODE has been altered
+		{
+			//Write back
+			put_inode(mip->dev, mip->ino, &(mip->INODE));
+		}
+	}
+}
+
+void print_inode(int dev, int ino)
+{
+	int i = 0;
+	char ibuf[1024];
+	INODE * inode;
+}
+
+#endif
+
+
+//****************************************** pwd.c *************************************************
+#include "Type.h"
+#include "Inode_Util.c"
+
+#ifndef PWD_C
+#define PWD_C
+
+// Global Variables ********************************************************************************
+
+extern PROC * _running;
+
+// Prototypes **************************************************************************************
+
+void pwd();
+void pwd_recursive(MINODE * dir);
+
+// Functions ***************************************************************************************
+
+void pwd()
+{
+	pwd_recursive(_running->cwd);
+	printf("\n");
+}
+
+void pwd_recursive(MINODE * dir)
+{
+	int ino;
+	char filename[255];
+	INODE ip;
+	MINODE * mip;
+	
+	if(dir->ino == 2)
+	{
+		printf("/");
+		return;
+	}
+	
+	if((ino = isearch_ino(dir, "..")) == 2) //If your parent directory is root
+	{
+		mip = iget(dir->dev, 2);
+		
+		//Load the name of the current directory
+		isearch_name(mip, dir->ino, filename);
+		printf("/%s", filename);
+		
+		return;
+	}
+	else
+	{
+		mip = iget(dir->dev, ino);
+		
+		pwd_recursive(mip);
+		
+		//Load the name of the current directory
+		isearch_name(mip, dir->ino, filename);
+		printf("/%s", filename);
+		
+		return;
+	}
+}
+
+#endif
+
+
+//****************************************** ls.c **************************************************
+#include "Inode_Util.c"
+#include "Inode_Data.c"
+#include "Block_Data.c"
+
+#ifndef LS_C
+#define LS_C
+
+// Global Variables ********************************************************************************
+
+extern PROC * _running;
+
+// Prototypes **************************************************************************************
+
+void ls(char * pathname);
+void print_Dir(int dev, INODE * inode);
+void print_file(int dev, int ino);
+
+// Functions ***************************************************************************************
+
+void ls(char * pathname)
+{
+	if(pathname) //If the pathname is specified
+	{
+		//Go to that pathname and then print the directory
+		char ibuf[BLKSIZE];
+		INODE * inode = get_inode(_running->cwd->dev, getino(_running->cwd->dev, pathname), ibuf);
+		
+		print_Dir(_running->cwd->dev, inode);
+	}
+	else //Otherwise print cwd
+		print_Dir(_running->cwd->dev, &_running->cwd->INODE);
+}
+
+void print_Dir(int dev, INODE * inode)
+{
+	int i;
+	char buf[BLKSIZE];
+	
+	//Check for if the supplied inode is a directory
+	if(inode->i_mode == 16877)
+	{
+		//Access every data block that this directory contains
+		for(i=0; i<12; i++)
+		{
+			//Use this INODE to find the data block number
+			int iblock = inode->i_block[i];
+			
+			if(iblock) //If the block number is 0, that block does not exist
+			{
+				//Read in the block and print the directory listing
+				get_block(dev, iblock, buf);
+				
+				char * cp = buf; //Character pointer to hold the current position within the block
+				DIR * dp = (DIR *)buf;
+				
+				while(cp < &buf[BLKSIZE])
+				{
+					//TODO create print_file()
+					//print_file(dev, ino);
+					printf("%s ", dp->name);
+					
+					//Increment cp and set dp to the next file in the directory
+					cp += dp->rec_len;
+					dp = (DIR *)cp;
+				}
+				
+				printf("\n");
+			}
+		}
+	}
+	
+	else
+		printf("The file supplied was not a directory.\n");
+}
+
+#endif
+
+
+#include "Type.h"
+#include "Inode_Util.c"
+
+#ifndef CD_C
+#define CD_C
+
+// Global Variables ********************************************************************************
+
+extern char _cwd[BLKSIZE];
+extern PROC * _running;
+
+// Prototypes **************************************************************************************
+
+void cd(char * pathname);
+void update_cwd(MINODE * dir);
+
+// Functions ***************************************************************************************
+
+void cd(char * pathname)
+{	
+	int ino = getino(_running->cwd->dev, pathname);
+	MINODE * mip;
+	
+	if(ino)
+	{
+		mip = iget(_running->cwd->dev, ino);
+		
+		if(mip->INODE.i_mode == 16877)
+		{
+			_running->cwd = mip;
+			update_cwd(_running->cwd);
+		}
+		else
+			printf("The supplied location was not a valid directory.\n");
+			
+		return;
+	}
+	
+	printf("The supplied path does not exist.\n");
+}
+
+void update_cwd(MINODE * dir)
+{
+	int ino;
+	char filename[255];
+	INODE ip;
+	MINODE * mip;
+	
+	if(dir->ino == 2)
+	{
+		strcpy(_cwd, "/");
+		return;
+	}
+	
+	if((ino = isearch_ino(dir, "..")) == 2) //If your parent directory is root
+	{
+		mip = iget(dir->dev, 2);
+		
+		//Load the name of the current directory
+		isearch_name(mip, dir->ino, filename);
+		sprintf(_cwd, "/%s", filename);
+		
+		return;
+	}
+	else
+	{
+		mip = iget(dir->dev, ino);
+		
+		pwd_recursive(mip);
+		
+		//Load the name of the current directory
+		isearch_name(mip, dir->ino, filename);
+		strcat(_cwd, filename);
+		
+		return;
+	}
+}
+
+#endif
+
+
+#include "Block_Data.c"
+#include "Inode_Data.c"
+#include "Inode_Util.c"
+#include <time.h>
+
+#ifndef CREAT_C
+#define CREAT_C
+
+//local globals
+extern PROC * _running;
+
+//Prototypes
+void mycreat(char *pathname);
+int createFile(MINODE *parentMinode, char* fileName);
+int enterName(MINODE *parentMinode, int ino, char *name);
+
+
+void mycreat(char *pathname){
+    //local variables
+    char *path[16];
+    char filePath[BLKSIZE];
+    char *fileName;
+    int numberOfDirs;
+    char pathnameTemp[BLKSIZE];
+    INODE *filePathInode;
+    MINODE *filePathMinode;
+    int ino, bno;
+
+    strcpy(pathnameTemp, pathname);
+		
+    //tokenize pathname
+    numberOfDirs = tokenize(path, pathnameTemp, "/");
+
+		if(numberOfDirs > 1)
+		{
+    	//cat to dir path;
+		  for(int i = 0; i < numberOfDirs-1; i++){
+		      strcat(filePath, "/");
+		      strcat(filePath, path[i]);
+		  }
+
+		  fileName = path[numberOfDirs - 1];
+    }
+    else
+    {
+    	strcpy(filePath, ".");
+    	fileName = pathname;
+    }
+
+    //get ino and inode of filePath
+    if(filePathMinode = iget(_running->cwd->dev, getino(_running->cwd->dev, filePath)))
+    {
+		  filePathInode = &(filePathMinode->INODE);
+
+		  //verify filePathInode is a dir
+		  if(S_ISDIR(filePathInode->i_mode))
+		  {
+				//verify fileName does not exist
+				if(!getino(_running->cwd->dev, pathname))
+				{
+					//create file
+					createFile(filePathMinode, fileName);
+
+					//inc filePathInode link count
+					filePathInode->i_links_count++;
+
+					//update atime and mark dirty
+					filePathInode->i_atime = time(0L);
+					filePathMinode->dirty = 1;
+					//write back to disk
+					iput(filePathMinode);
+
+					//Successful creat
+					return;
+				}
+				else
+					printf("This file already exists.\n");
+		  }
+		  else
+		  	printf("The parent directory specified does not exist.\n");
+    }
+    else
+    	printf("The specified path does not exist.\n");
+}
+
+int createFile(MINODE *parentMinode, char* fileName){
+    //local variables
+    int ino, bno;
+    MINODE *mip;
+    INODE *ip;
+    char *cp, buf[BLKSIZE];
+    DIR *dp;
+
+    //allocate inode and block
+    ino = ialloc(_running->cwd->dev);
+    bno = balloc(_running->cwd->dev);
+
+    //load new inode
+    mip = iget(_running->cwd->dev, ino);
+
+    //write to inode
+    ip = &(mip->INODE);
+
+    ip->i_mode = 0x81A4; //mark as FILE, se premissions
+    ip->i_uid = _running->uid; //owner's uid
+    ip->i_gid = _running->gid; //group's id
+    ip->i_size = 0; //0 for files
+    ip->i_links_count = 1; //links to ..
+    ip->i_atime = ip->i_ctime = ip->i_mtime = time(0L); //current time
+    ip->i_blocks = 0;
+    ip->i_block[0] = bno; //first direct block to allocated block
+    for(int i = 1; i <= 14; i++)
+        ip->i_block[i] = 0;
+    
+    //set inode in memory to dirty
+    mip->dirty = 1;
+
+    //write inode in memory back to disk
+    iput(mip);
+
+    //enter name ..
+    enterName(parentMinode, ino, fileName);
+
+    //successful
+    return 0;
+}
+
+int enterName(MINODE *parentMinode, int ino, char *name){
+    INODE *parentInode = &parentMinode->INODE;
+    char *cp, buf[BLKSIZE];
+    DIR *dp;
+    int bno, neededLen, idealLen, remainingLen;
+    
+    //find next block
+    for(int i = 0; i < 12; i++){
+
+        if(!parentInode->i_block[i])
+            break;
+        
+        bno = parentInode->i_block[i];
+        get_block(_running->cwd->dev, bno, buf);
+
+        //go to last entry
+        cp = buf;
+        dp = (DIR*)cp;
+
+        while((cp+dp->rec_len) < (buf+BLKSIZE)){
+            
+            cp += dp->rec_len;
+            dp = (DIR*)cp;
+        }
+
+        //get ideal length and remaining length
+        idealLen = 4*((8 + dp->name_len + 3)/4);
+        remainingLen = dp->rec_len - idealLen;
+        neededLen = 4*((8 + strlen(name) + 3)/4);
+
+        //if there is room in the block
+        if(remainingLen >= neededLen){
+        		
+        		//Set the OLD last entry's rec_length to the correct size and then incrememnt past it
+        		dp->rec_len = idealLen;        		
+        		cp += dp->rec_len;
+        		dp = (DIR*)cp;
+        		
+        		//Now set the NEW last entry's information
+            dp->rec_len = remainingLen;
+            dp->inode = ino;
+            dp->name_len = strlen(name);
+            strcpy(dp->name, name);
+
+            //write block back
+            put_block(_running->cwd->dev, bno, buf);
+
+            //success
+            return 0;
+        }
+    }
+    
+    return 1;
+}
+
+#endif
+
+
+#include "Block_Data.c"
+#include "Inode_Data.c"
+#include "Inode_Util.c"
+#include "creat.c"
+#include <time.h>
+
+#ifndef MKDIR_C
+#define MKDIR_C
+
+//local globals
+extern PROC *_running;
+
+void mymkdir(char * pathname);
+int createDir(MINODE *parentInode, char* dirName);
+
+void mymkdir(char *pathname){
+    //local variables
+    char pathnameTemp[BLKSIZE];
+    char *path[16];
+    char dirPath[BLKSIZE];
+    char *dirName;
+    int numberOfDirs;
+    INODE *dirPathInode;
+    MINODE *dirPathMinode;
+    int ino, bno;
+
+		strcpy(pathnameTemp, pathname);
+		
+    //tokenize pathname
+    numberOfDirs = tokenize(path, pathnameTemp, "/");
+
+		if(numberOfDirs > 1)
+		{
+    	//cat to dir path;
+		  for(int i = 0; i < numberOfDirs-1; i++){
+		      strcat(dirPath, "/");
+		      strcat(dirPath, path[i]);
+		  }
+
+		  dirName = path[numberOfDirs - 1];
+    }
+    else
+    {
+    	strcpy(dirPath, ".");
+    	dirName = pathname;
+    }
+
+    //get ino and inode of dirPath
+    if(dirPathMinode = iget(_running->cwd->dev, getino(_running->cwd->dev, dirPath))){
+		  dirPathInode = &dirPathMinode->INODE;
+
+		  //verify dirPathInode is a dir
+      if(S_ISDIR(dirPathInode->i_mode)){
+				//verify dirName does not exist
+				if(!isearch_ino(dirPathMinode, dirName)){
+					//mkdir
+					createDir(dirPathMinode, dirName);
+
+					//inc dirPathInode link count
+					dirPathInode->i_links_count++;
+
+					//update atime and mark dirty
+					dirPathInode->i_atime = time(0L);
+					dirPathMinode->dirty = 1;
+					
+					//write back to disk
+					iput(dirPathMinode);
+
+					//successful mkdir 
+					return;
+				}
+				else
+					printf("This directory already exists.\n");
+		  }
+		  else
+		  	printf("The parent directory specified does not exist.\n");
+    }
+    else
+    	printf("The path specified does not exist.\n");
+}
+
+int createDir(MINODE *parentInode, char* dirName){
+    //local variables
+    int ino, bno;
+    MINODE *mip;
+    INODE *ip;
+    char *cp, buf[BLKSIZE];
+    DIR *dp;
+
+    //allocate inode and block
+    ino = ialloc(_running->cwd->dev);
+    bno = balloc(_running->cwd->dev);
+
+    //load new inode
+    mip = iget(_running->cwd->dev, ino);
+
+    //write to inode
+    ip = &(mip->INODE);
+
+    ip->i_mode = 0x41ED; //mark as DIR, se premissions
+    ip->i_uid = _running->uid; //owner's uid
+    ip->i_gid = _running->gid; //group's id
+    ip->i_size = BLKSIZE; //blocksize
+    ip->i_links_count = 2; //links to . and ..
+    ip->i_atime = ip->i_ctime = ip->i_mtime = time(0L); //current time
+    ip->i_blocks = 2;
+    ip->i_block[0] = bno; //first direct block to allocated block
+    for(int i = 1; i <= 14; i++)
+        ip->i_block[i] = 0;
+    
+    //set inode in memory to dirty
+    mip->dirty = 1;
+
+    //write inode in memory back to disk
+    iput(mip);
+
+    //data block for . and .. 
+    get_block(_running->cwd->dev, bno, buf);
+
+    cp = buf;
+    dp = (DIR*)cp;
+
+    //write . and .. blocks SHOULD BE A FUNCTION LATER//
+    dp->inode = ino;
+    dp->rec_len = 4*((8 + 1 + 3)/4); //ideal length
+    dp->name_len = 1;
+    strcpy(dp->name, ".");
+
+    cp += dp->rec_len;
+    dp = (DIR*)cp;
+
+    dp->inode = parentInode->ino;
+    dp->rec_len = BLKSIZE - 12;
+    dp->name_len = 2;
+    strcpy(dp->name, "..");
+
+    //write block
+    put_block(_running->cwd->dev, bno, buf);
+
+    //enter names . and ..
+    enterName(parentInode, ino, dirName);
+
+    //successful
+    return 0;
+}
+
+#endif
+
+
+#include "Block_Data.c"
+#include "Inode_Data.c"
+#include "Inode_Util.c"
+#include <time.h>
+
+#ifndef RMDIR_C
+#define RMDIR_C
+
+extern PROC * _running;
+
+//Prototypes
+void myrmdir(char *pathname);
+int rmChild(MINODE *parentMinode, char *name);
+int rmChild(MINODE *parentMinode, char *name);
+
+
+void myrmdir(char *pathname){
+    int ino, parentIno;
+    MINODE *mip, *pmip;
+    char * dirName, * path[16], dirPath[BLKSIZE], pathnameTemp[BLKSIZE];
+    
+   strcpy(pathnameTemp, pathname);
+   int numberOfDirs = tokenize(path, pathname, "/");
+
+	  if(numberOfDirs > 1)
+	  {
+		  //cat to dir path;
+		  for(int i = 0; i < numberOfDirs-1; i++){
+		      strcat(dirPath, "/");
+		      strcat(dirPath, path[i]);
+		  }
+		  
+		  dirName = path[numberOfDirs - 1];
+    }
+    else
+    {
+    	strcpy(dirPath, ".");
+    	dirName = pathname;
+    }
+
+    //get ino
+    parentIno = getino(_running->cwd->dev, dirPath);
+
+    //get minode 
+    if(pmip = iget(_running->cwd->dev, parentIno))
+    {
+		  //get child ino and inode
+		  if(ino = getino(_running->cwd->dev, pathnameTemp))
+		  {
+				mip = iget(_running->cwd->dev , ino);		
+				
+				//deallocate block and inode
+				for(int i = 0; i <= 12; i++){
+				    bdealloc(_running->cwd->dev, mip->INODE.i_block[i]);
+				}
+
+				idealloc(_running->cwd->dev, ino);
+
+				//remove child's entry
+				rmChild(pmip, dirName);
+
+				//decrement parent's inode link by 1
+				pmip->INODE.i_links_count--;
+
+				//update parent time, make dirty
+				pmip->INODE.i_atime = pmip->INODE.i_ctime = time(0L);
+				pmip->dirty = 1;
+
+				//write back to disk
+				iput(mip);
+
+				//success
+				return;
+		  }
+		  else
+		  printf("The specified directory does not exist.\n");
+		  
+    }
+    else
+    	printf("The specified path does not exist.\n");
+
+}
+
+int rmChild(MINODE *parentMinode, char *name){
+    INODE *pip = &parentMinode->INODE;
+    DIR *dp, *prevdp, *lastdp;
+    char buf[BLKSIZE], dirName[255], *cp, *lastcp;
+    int ino, start, end;
+	  
+	  //Check to make sure that the child exists within the parent directory
+	  if(ino = isearch_ino(parentMinode, name))
+	  {
+			for(int i=0; i<12; i++)
+			{
+				if(pip->i_block[i])
+				{
+					//Get DIR info
+					get_block(_running->cwd->dev, pip->i_block[i], buf);
+
+					//erase name entry
+					cp = buf;
+					dp = (DIR*)buf;
+					
+					while(cp < (buf+1024)){
+							strncpy(dirName, dp->name, dp->name_len);
+							dirName[dp->name_len] = 0;
+							
+							//found entry
+							if(!strcmp(dirName, name)){
+							
+							    //If last entry
+							    if(cp + dp->rec_len == buf + 1024){
+
+							        prevdp->rec_len += dp->rec_len;
+							        put_block(_running->cwd->dev, pip->i_block[i], buf);
+
+							    }
+							    else{
+											
+											//Move all following entries up
+							        lastcp = cp;
+							        lastdp = (DIR*)lastcp;
+
+							        //go to last entry
+							        while(lastcp < buf+1024){
+							            lastcp += lastdp->rec_len;
+							            lastdp = (DIR*)lastcp;
+							        }
+
+							        lastdp->rec_len = dp->rec_len;
+							        
+							        //location of first dir to be moved over
+							        start = cp + dp->rec_len;
+							        end = buf + 1024;
+
+							        //shift memory left, overwriting entry
+							        memmove(cp, start, end-start);
+
+							        //write back block
+							        put_block(_running->cwd->dev, pip->i_block[i], buf);
+							    }
+
+							    //mark parent minode dirty
+							    parentMinode->dirty = 1;
+
+							    //write minode to disk
+							    iput(parentMinode);
+							    
+							    //success
+									return 0;
+							}
+
+							prevdp = dp;
+							cp += dp->rec_len;
+							dp = (DIR*)cp;
+					}
+				}
+				
+				return 1;
+			}
+	  }
+	  
+	  //unsuccessful rmdir
+	  return 1;
+}
+
+#endif
+
+
+#ifndef LINK_UNLINK_C
+#define LINK_UNLINK_C
+
+#include <string.h>
+
+extern PROC * _running;
+
+int truncate(MINODE *mip){
+    int buf[256], indirectBuf[256];
+    INODE *inode = &mip->INODE;
+
+    //release inode data blocks
+    //direct blocks
+    for(int i = 0; i < 12; i++){
+        if(inode->i_block[i])
+            bdealloc(_running->cwd->dev, inode->i_block[i]);
+    }
+
+    //indirect
+    if(inode->i_block[12]){
+        
+        get_block(_running->cwd->dev, inode->i_block[12], (char *)buf);
+
+        for (int i = 0; i < 256; i++){
+            if(buf[i])
+                bdealloc(_running->cwd->dev, buf[i]);
+        }
+    }
+
+    //doube indirect
+    if(inode->i_block[13]){
+
+        get_block(_running->cwd->dev, inode->i_block[13], (char *)buf);
+
+        for(int i = 0; i < 256; i++){
+
+            get_block(_running->cwd->dev, buf[i], (char *)indirectBuf);
+            for(int j = 0; j < 256; j++){
+
+                if(indirectBuf[j])
+                    bdealloc(_running->cwd->dev, indirectBuf[j]);
+            }
+        }
+    }
+
+    //update time field
+    inode->i_atime = inode->i_mtime = time(0L);
+
+    //inode size = 0, mark dirty
+    inode->i_size = 0;
+    mip->dirty = 1;
+
+    return 0;
+}
+
+void link(char *oldPathname, char*newPathname){
+  char *oldFile[16], *newFile[16], *newPath = "", *newName;
+  int inoOld, inoNew, numberOfTokens;
+  INODE *inodeOld, *inodeNew;
+  MINODE *minodeOld, *minodeNew;
+
+  //load old into memory
+  inoOld = getino(_running->cwd->dev, oldPathname);
+  minodeOld = iget(_running->cwd->dev, inoOld);
+  inodeOld = &minodeOld->INODE;
+
+  //check old is not dir
+  if(S_ISDIR(inodeOld->i_mode)){
+    printf("Cannot link to a directory.\n");
+    return;
+  }
+
+  //check new path exists but name does not
+  //tokenize new pathname
+  numberOfTokens = tokenize(newFile, newPathname, "/");
+
+  //cat to new dir path
+  for(int i = 0; i < numberOfTokens-2; i++){
+
+    strcat(newPath, "/");
+    strcat(newPath, newFile[i]);
+  }
+
+  newName = newFile[numberOfTokens-1];
+
+  //check if path exists
+  if(!getino(_running->cwd->dev, newPath)){
+    printf("Supplied pathname does not exist.\n");
+    return;
+  }
+
+  //check that name doesnt exist
+  if(getino(_running->cwd->dev, newPathname)){
+    printf("Link name already exists\n");
+    return;
+  }
+
+  //load new into memory
+  inoNew = getino(_running->cwd->dev, newPath);
+  minodeNew = iget(_running->cwd->dev, inoNew);
+  inodeNew = &minodeNew->INODE;
+
+  //add entry to to new path data block with old ino
+  enterName(minodeNew, inoOld, newName);
+
+  //increment i_links of inode
+  inodeOld->i_links_count++;
+
+  //write inode back to disk 
+  minodeOld->dirty = 1;
+  minodeNew->dirty = 1;
+
+  iput(minodeNew);
+  iput(minodeOld);
+}
+
+void unlink(char *pathname){
+  char *path[16], filePath[BLKSIZE], *fileName, buf[BLKSIZE], pathnameTemp[BLKSIZE]; 
+  int ino, parentIno;
+  INODE *inode, *parentInode;
+  MINODE *minode, *parentMinode;
+
+ 	//tokenize new pathname
+  strcpy(pathnameTemp, pathname);
+	int numberOfDirs = tokenize(path, pathname, "/");
+
+	if(numberOfDirs > 1)
+	{
+		//cat to dir path;
+		for(int i = 0; i < numberOfDirs-1; i++){
+			  strcat(filePath, "/");
+			  strcat(filePath, path[i]);
+		}
+		
+		fileName = path[numberOfDirs - 1];
+	}
+	else
+	{
+		strcpy(filePath, ".");
+		fileName = pathname;
+	}
+
+  ino = getino(_running->cwd->dev, pathname);
+  minode = iget(_running->cwd->dev, ino);
+  inode = &minode->INODE;
+
+  if(S_ISDIR(inode->i_mode)){
+    printf("cannot unlink dir\n");
+    return;
+  }  
+
+  //decremet inode link count
+
+  inode->i_links_count--;
+
+  //remove inode if links = 0
+  if(!inode->i_links_count){
+  
+  	truncate(minode);
+  }
+
+  //remove name from parent directory 
+  parentIno = getino(_running->cwd->dev, filePath);
+  parentMinode = iget(_running->cwd->dev, parentIno);
+  parentInode = &parentMinode->INODE;
+
+  rmChild(parentMinode, fileName);
+
+  parentInode->i_atime = parentInode->i_mtime = time(0L);
+  parentMinode->dirty = 1;
+  minode->dirty = 1;
+  iput(minode);
+  iput(parentMinode);
+}
+
+void symlink(char *oldPathname, char *newPathname){
+  int oldIno, linkIno;
+  char linkTarget_pathname[60] = "/";
+  INODE *oldInode, *linkInode;
+  MINODE *oldMinode, *linkMinode;
+
+  //verify old pathname
+  if(!(oldIno = getino(_running->cwd->dev, oldPathname))){
+    printf("path does not exist\n");
+    return;
+  }
+  
+  strncat(linkTarget_pathname, oldPathname, 59);
+  
+  oldMinode = iget(_running->cwd->dev, oldIno);
+  oldInode = &oldMinode->INODE;
+
+  //create new pathname file
+  mycreat(newPathname);
+
+  oldMinode->dirty = 1;
+
+  linkIno = getino(_running->cwd->dev, newPathname);
+  linkMinode = iget(_running->cwd->dev, linkIno);
+  linkInode = &linkMinode->INODE;
+
+  linkInode->i_mode = 0120000;
+  
+  for(int j=0; j<60; j+=4)
+  {
+  	char cbuf[4] = {linkTarget_pathname[j], linkTarget_pathname[j+1], linkTarget_pathname[j+2], linkTarget_pathname[j+3]};
+  	
+  	memcpy(&linkInode->i_block[j/4], cbuf, 4);
+  }
+
+  linkMinode->dirty = 1;
+
+  iput(linkMinode);
+}
+
+void readlink(char *pathname){
+  int ino, i = 0;
+  char buf[4];
+  MINODE * minode;
+  INODE *inode;
+
+  //load pathname inode into memory
+  ino = getino(_running->cwd->dev, pathname);
+  minode = iget(_running->cwd->dev, ino);
+  inode = &minode->INODE;
+
+  //check if sym link
+  if(!S_ISLNK(inode->i_mode)){
+    printf("not a link file\n");
+    return;
+  }
+
+  //return contents of i blocks
+  for(int i=0; i<15; i++)
+  {
+  	if(inode->i_block[i])
+  	{
+			memcpy(buf, &inode->i_block[i], 4);
+			
+			printf("%s", buf);
+  	}
+  }
+  
+  printf("\n");
+}
+
+#endif

@@ -15,21 +15,24 @@ int createDir(MINODE *parentInode, char* dirName);
 
 void mymkdir(char *pathname){
     //local variables
+    char pathnameTemp[BLKSIZE];
     char *path[16];
-    char *dirPath = "";
+    char dirPath[BLKSIZE];
     char *dirName;
     int numberOfDirs;
     INODE *dirPathInode;
     MINODE *dirPathMinode;
     int ino, bno;
 
+		strcpy(pathnameTemp, pathname);
+		
     //tokenize pathname
-    numberOfDirs = tokenize(path, pathname, "/");
+    numberOfDirs = tokenize(path, pathnameTemp, "/");
 
 		if(numberOfDirs > 1)
 		{
     	//cat to dir path;
-		  for(int i = 0; i < numberOfDirs-2; i++){
+		  for(int i = 0; i < numberOfDirs-1; i++){
 		      strcat(dirPath, "/");
 		      strcat(dirPath, path[i]);
 		  }
@@ -38,7 +41,7 @@ void mymkdir(char *pathname){
     }
     else
     {
-    	dirPath = ".";
+    	strcpy(dirPath, ".");
     	dirName = pathname;
     }
 
