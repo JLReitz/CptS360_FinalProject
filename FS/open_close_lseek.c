@@ -18,7 +18,12 @@ void open_file(char *pathname, int mode){
     else   
         dev = running->cwd->dev;
 
-    ino = getino(dev, pathname);
+
+    if(!ino = getino(dev, pathname)){
+        //doesnt exist, create
+        mycreat(pathname);
+        ino = getino(dev, pathname);
+    }
 
     //load into memory
     mip = iget(dev, ino);
